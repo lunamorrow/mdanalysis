@@ -64,7 +64,7 @@ class TestSinglePlanar(BaseTestLeafletFinder):
 
 @pytest.mark.parametrize("method,kwargs", [
     ("spectralclustering", {"cutoff": 40, "n_leaflets": 4}),
-    ("dbscan", {"cutoff": 20, "n_leaflets": 4, "eps": 10})
+    ("dbscan", {"cutoff": 20, "n_leaflets": 4, "eps": 40, "angle_factor": 10})
 ])
 class TestDoublePlanar(BaseTestLeafletFinder):
     file = Martini_double_membrane
@@ -131,7 +131,8 @@ class BaseTestVesicle:
 @pytest.mark.parametrize("method,kwargs", [
     ("graph", {"cutoff": 25}),
     ("spectralclustering", {"cutoff": 100, "delta": 10}),
-    ("dbscan", {"cutoff": 30})
+    ("dbscan", {"cutoff": 30, "angle_factor": 0.5}),
+    ("dbscan", {"cutoff": 30, "eps": 10})
 ])
 class TestVesicleFull(BaseTestVesicle):
     def test_full(self, universe, method, kwargs):
@@ -145,7 +146,7 @@ class TestVesicleFull(BaseTestVesicle):
 
 @pytest.mark.parametrize("method,kwargs", [
     ("spectralclustering", {"cutoff": 100, "delta": 10}),
-    ("dbscan", {"cutoff": 30})
+    ("dbscan", {"cutoff": 30, "eps": 10})
 ])
 class TestVesicleHalf(BaseTestVesicle):
     def test_half(self, universe, method, kwargs):
@@ -227,7 +228,7 @@ class BaseTestMessyVesicle:
         return mda.Universe(self.file)
 
 @pytest.mark.parametrize("method,kwargs", [
-    ("dbscan", {"cutoff": 30})
+    ("dbscan", {"cutoff": 30, "eps": 10})
 ])
 class TestMessyVesicleFull(BaseTestMessyVesicle):
     def test_full(self, universe, method, kwargs):
@@ -240,7 +241,7 @@ class TestMessyVesicleFull(BaseTestMessyVesicle):
                          err_msg="Found wrong leaflet lipids")
 
 @pytest.mark.parametrize("method,kwargs", [
-    ("dbscan", {"cutoff": 30})
+    ("dbscan", {"cutoff": 30, "eps": 10})
 ])
 class TestMessyVesicleHalf(BaseTestMessyVesicle):
     def test_half(self, universe, method, kwargs):

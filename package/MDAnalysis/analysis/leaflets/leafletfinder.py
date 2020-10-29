@@ -173,33 +173,25 @@ class LeafletFinder(object):
         else:
             box = None
 
-        results = self._method(self.residues,
-                               self.selection,
-                               cutoff=self.cutoff, box=box,
-                               return_predictor=True,
-                               n_leaflets=self.n_leaflets,
-                               **self.kwargs)
-
-        if isinstance(results, tuple):
-            self._components, self.predictor = results
-        else:
-            self._components = results
-            self.predictor = None
-        self.components = self._components[:self.n_leaflets]
+        clusters = self._method(self.residues,
+                                self.selection,
+                                cutoff=self.cutoff, box=box,
+                                return_predictor=True,
+                                n_leaflets=self.n_leaflets,
+                                **self.kwargs)
+        self.clusters = clusters
+        self.components = self.clusters.clusters_by_size[:self.n_leaflets]
 
         if len(self.headgroups) == len(self.selection):
             self.groups = [self.selection[x] for x in self.components]
         else:
             self.groups = [sum(self.headgroups[y] for y in x)
                            for x in self.components]
-
-        # self.group_positions = [self.positions[x] for x in self.components]
         self.sizes = [len(ag) for ag in self.groups]
 
         z = [x.center_of_geometry()[-1] for x in self.groups]
         self.leaflet_order = np.argsort(z)[::-1]
         self.leaflets = [self.groups[i] for i in self.leaflet_order]
-        # self.leaflet_positions = [self.group_positions[i] for i in self.leaflet_order]
 
         
     def __init__(self, universe, select='all', cutoff=None, pbc=True,

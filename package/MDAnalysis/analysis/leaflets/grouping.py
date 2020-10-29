@@ -26,11 +26,12 @@ import warnings
 import numpy as np
 
 from ..distances import contact_matrix
+from ..clusters import Clusters
 from .utils import (get_centers_by_residue, get_distances_with_projection,
                     get_orientations)
 
 def group_by_graph(residues, headgroups, cutoff=15.0, sparse=None, box=None,
-                   return_predictor=False, **kwargs):
+                   **kwargs):
     try:
         import networkx as nx
     except ImportError:
@@ -59,15 +60,15 @@ def group_by_graph(residues, headgroups, cutoff=15.0, sparse=None, box=None,
 
     graph = nx.Graph(adj)
     groups = [np.sort(list(c)) for c in nx.connected_components(graph)]
-    if return_predictor:
-        return (groups, graph)
-    else:
-        return groups
+    clusters = Clusters(graph)
+    clusters.set_clusters(groups)
+    return clusters
 
 
 def group_by_dbscan(residues, headgroups, angle_threshold=0.8,
-                    return_predictor=False, cutoff=30, box=None,
-                    eps=None, min_samples=10, **kwargs):
+                    cutoff=20, box=None,
+                    eps=30, min_samples=20, angle_factor=1,
+                    **kwargs):
     try:
         import sklearn.cluster as skc
     except ImportError:
@@ -81,33 +82,31 @@ def group_by_dbscan(residues, headgroups, angle_threshold=0.8,
                                     headgroup_centers=coordinates,
                                     normalize=True)
     dist_mat = get_distances_with_projection(coordinates, orientations,
-                                             cutoff, box=box)
+                                             cutoff, box=box,
+                                             angle_factor=angle_factor,
+                                             average_neighbors=3)
     if eps is None:
         eps = cutoff
     
     angles = np.dot(orientations, orientations.T)
+    angles *= -1
+    angles = np.clip(angles, -angle_threshold, angle_threshold)
     angles += 1
-    # angles /= 2
-
+    angles /= 2
     db = skc.DBSCAN(eps=eps, min_samples=min_samples, metric="precomputed")
-    clusters = db.fit_predict(dist_mat / angles)
-    ix = np.argsort(clusters)
-    indices = np.arange(len(coordinates))
-    groups = np.split(indices[ix], np.where(np.ediff1d(clusters[ix]))[0]+1)
-    groups = [np.sort(x) for x in groups]
-    outliers = []
-    if clusters[ix[0]] == -1:
-        outliers = [groups.pop(0)]
-    groups.sort(key=lambda x: len(x), reverse=True)
-    groups += outliers
-    if return_predictor:
-        return (groups, db)
-    return groups
-    
+    mask = dist_mat != dist_mat.max()
+    data = dist_mat
+    data[mask] += data[mask]* angles[mask]
+    data[~mask] += cutoff
+
+    clusters = Clusters(skc.DBSCAN, eps=eps, min_samples=min_samples,
+                        metric="precomputed")
+    clusters.run(data)
+    return clusters    
 
 def group_by_spectralclustering(residues, headgroups, n_leaflets=2, delta=20,
                                 cutoff=30, box=None, angle_threshold=0.8,
-                                return_predictor=False):
+                                angle_factor=1, **kwargs):
     try:
         import sklearn.cluster as skc
     except ImportError:
@@ -121,7 +120,8 @@ def group_by_spectralclustering(residues, headgroups, n_leaflets=2, delta=20,
                                     headgroup_centers=coordinates,
                                     normalize=True)
     dist_mat = get_distances_with_projection(coordinates, orientations,
-                                             cutoff, box=box)
+                                             cutoff, box=box,
+                                             angle_factor=angle_factor)
     
     if delta is None:
         delta = np.max(dist_mat[dist_mat < cutoff*2]) / 3
@@ -133,14 +133,7 @@ def group_by_spectralclustering(residues, headgroups, n_leaflets=2, delta=20,
     cos /= (2*angle_threshold)
     ker = gau * cos
 
-    sc = skc.SpectralClustering(n_clusters=n_leaflets, affinity="precomputed")
-    clusters = sc.fit_predict(ker)
-
-    ix = np.argsort(clusters)
-    indices = np.arange(len(coordinates))
-    groups = np.split(indices[ix], np.where(np.ediff1d(clusters[ix]))[0]+1)
-    groups = [np.sort(x) for x in groups]
-    groups.sort(key=lambda x: len(x), reverse=True)
-    if return_predictor:
-        return (groups, sc)
-    return groups
+    clusters = Clusters(skc.SpectralClustering, n_clusters=n_leaflets,
+                        affinity="precomputed")
+    clusters.run(ker)
+    return clusters

@@ -50,10 +50,12 @@ def get_orientations(residues, headgroups, box=None, headgroup_centers=None,
     return orientations
 
 
-def get_distances_with_projection(coordinates, orientations, cutoff, box=None):
+def get_distances_with_projection(coordinates, orientations, cutoff, box=None,
+                                  angle_factor=1, average_neighbors=0):
     n_coordinates = len(coordinates)
     # set up distance matrix
-    dist_mat = np.ones((n_coordinates, n_coordinates)) * 2 * cutoff
+    filler = (angle_factor + 1) * cutoff
+    dist_mat = np.ones((n_coordinates, n_coordinates)) * filler
     pairs, dists = capped_distance(coordinates, coordinates, cutoff, box=box,
                                   return_distances=True)
     pi, pj = tuple(pairs.T)
@@ -70,14 +72,23 @@ def get_distances_with_projection(coordinates, orientations, cutoff, box=None):
         d = d[1:]
         i_coord = coordinates[i]
         neigh_ = coordinates[js].copy()
-        vec = orientations[[i]]
+
         if box is not None:
             unwrap_around(neigh_, i_coord, box[:3])
         neigh_ -= i_coord
 
+        vec = orientations[[i]]
+        dist_order = np.argsort(d)
+        nearest_j = js[dist_order[:average_neighbors]]
+        nearest = orientations[nearest_j]
+        neigh_orients = np.array([vec] + list(nearest))
+        vec = neigh_orients.mean(axis=0)
+        vec /= np.linalg.norm(vec)
+
         ang_ = calc_cosine_similarity(vec, neigh_)
         ang_ = np.nan_to_num(ang_, nan=1)
+        
         proj = np.abs(d * ang_)
-        dist_mat[i, js] = dist_mat[js, i] = proj + d
-    
+        dist_mat[i, js] = dist_mat[js, i] = proj * angle_factor + d
+        
     return dist_mat
