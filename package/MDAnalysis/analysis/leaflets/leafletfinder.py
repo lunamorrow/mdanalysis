@@ -24,7 +24,8 @@
 import numpy as np
 
 from .grouping import (group_by_dbscan, group_by_graph,
-                       group_by_spectralclustering)
+                       group_by_spectralclustering,
+                       group_by_orientation)
 
 class LeafletFinder(object):
     """Identify atoms in the same leaflet of a lipid bilayer.
@@ -217,6 +218,8 @@ class LeafletFinder(object):
             # self.kwargs["n_leaflets"] = n_leaflets
         elif method == "dbscan":
             self._method = group_by_dbscan
+        elif method == "orientation":
+            self._method = group_by_orientation
         else:
             self._method = self.method = method
 
@@ -252,3 +255,72 @@ class LeafletFinder(object):
     def __repr__(self):
         return (f"LeafletFinder(select='{self.select}', "
                 f"cutoff={self.cutoff:.1f} Å, pbc={self.pbc})")
+
+
+
+def optimize_cutoff(universe, select, dmin=10.0, dmax=20.0, step=0.5,
+                    max_imbalance=0.2, **kwargs):
+    r"""Find cutoff that minimizes number of disconnected groups.
+
+    Applies heuristics to find best groups:
+
+    1. at least two groups (assumes that there are at least 2 leaflets)
+    2. reject any solutions for which:
+
+       .. math::
+
+              \frac{|N_0 - N_1|}{|N_0 + N_1|} > \mathrm{max_imbalance}
+
+       with :math:`N_i` being the number of lipids in group
+       :math:`i`. This heuristic picks groups with balanced numbers of
+       lipids.
+
+    Parameters
+    ----------
+    universe : Universe
+        :class:`MDAnalysis.Universe` instance
+    select : AtomGroup or str
+        AtomGroup or selection string as used for :class:`LeafletFinder`
+    dmin : float (optional)
+    dmax : float (optional)
+    step : float (optional)
+        scan cutoffs from `dmin` to `dmax` at stepsize `step` (in Angstroms)
+    max_imbalance : float (optional)
+        tuning parameter for the balancing heuristic [0.2]
+    kwargs : other keyword arguments
+        other arguments for  :class:`LeafletFinder`
+
+    Returns
+    -------
+    (cutoff, N)
+         optimum cutoff and number of groups found
+
+
+    .. Note:: This function can die in various ways if really no
+              appropriate number of groups can be found; it ought  to be
+              made more robust.
+
+    .. versionchanged:: 1.0.0
+       Changed `selection` keyword to `select`
+    """
+    kwargs.pop('cutoff', None)  # not used, so we filter it
+    _sizes = []
+    for cutoff in np.arange(dmin, dmax, step):
+        LF = LeafletFinder(universe, select, cutoff=cutoff, **kwargs)
+        # heuristic:
+        #  1) N > 1
+        #  2) no imbalance between large groups:
+        sizes = LF.sizes
+        if len(sizes) < 2:
+            continue
+        n0 = float(sizes[0])  # sizes of two biggest groups ...
+        n1 = float(sizes[1])  # ... assumed to be the leaflets
+        imbalance = np.abs(n0 - n1) / (n0 + n1)
+        # print "sizes: %(sizes)r; imbalance=%(imbalance)f" % vars()
+        if imbalance > max_imbalance:
+            continue
+        _sizes.append((cutoff, len(LF.sizes)))
+    results = np.rec.fromrecords(_sizes, names="cutoff,N")
+    del _sizes
+    results.sort(order=["N", "cutoff"])  # sort ascending by N, then cutoff
+    return results[0]  # (cutoff,N) with N>1 and shortest cutoff

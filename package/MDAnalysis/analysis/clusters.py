@@ -45,11 +45,15 @@ class Clusters:
         self.clusters_by_size = sorted(self.cluster_indices,
                                        key=lambda x: len(x), reverse=True)
 
-    def set_clusters(self, cluster_indices):
+    def set_clusters(self, cluster_indices, outlier_indices=[]):
         self.cluster_indices = cluster_indices
+        self.outlier_indices = outlier_indices
         self.clusters_by_size = sorted(self.cluster_indices,
                                        key=lambda x: len(x), reverse=True)
-        labels = np.zeros(sum(map(len, cluster_indices)))
+        n_values = sum(map(len, cluster_indices)) + len(outlier_indices)
+        labels = np.zeros(n_values)
         for i, cl in enumerate(cluster_indices):
             labels[cl] = i
+        for out in outlier_indices:
+            labels[out] = -1
         self.data_labels = labels

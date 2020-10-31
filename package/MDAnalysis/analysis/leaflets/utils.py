@@ -51,11 +51,14 @@ def get_orientations(residues, headgroups, box=None, headgroup_centers=None,
 
 
 def get_distances_with_projection(coordinates, orientations, cutoff, box=None,
-                                  angle_factor=1, average_neighbors=0):
+                                  angle_factor=1, average_neighbors=0,
+                                  max_dist=30,
+                                  average_orientations=False):
     n_coordinates = len(coordinates)
     # set up distance matrix
     filler = (angle_factor + 1) * cutoff
     dist_mat = np.ones((n_coordinates, n_coordinates)) * filler
+    dist_mat[np.diag_indices(n_coordinates)] = 0
     pairs, dists = capped_distance(coordinates, coordinates, cutoff, box=box,
                                   return_distances=True)
     pi, pj = tuple(pairs.T)
@@ -76,19 +79,27 @@ def get_distances_with_projection(coordinates, orientations, cutoff, box=None,
         if box is not None:
             unwrap_around(neigh_, i_coord, box[:3])
         neigh_ -= i_coord
-
+        
         vec = orientations[[i]]
-        dist_order = np.argsort(d)
-        nearest_j = js[dist_order[:average_neighbors]]
-        nearest = orientations[nearest_j]
-        neigh_orients = np.array([vec] + list(nearest))
-        vec = neigh_orients.mean(axis=0)
-        vec /= np.linalg.norm(vec)
+        if average_orientations:
+            dist_order = np.argsort(d)
+            within_threshold = d[dist_order] <= max_dist
+            nearest_j = js[dist_order[within_threshold][:average_neighbors]]
+            nearest = orientations[nearest_j]
+
+            neigh_orients = np.array([vec] + list(nearest))
+            vec = neigh_orients.mean(axis=0)
+            vec /= np.linalg.norm(vec)
+            orientations[i] = vec
 
         ang_ = calc_cosine_similarity(vec, neigh_)
         ang_ = np.nan_to_num(ang_, nan=1)
         
         proj = np.abs(d * ang_)
-        dist_mat[i, js] = dist_mat[js, i] = proj * angle_factor + d
+        dist_mat[i, js] = proj * angle_factor + d
+
+    dist_mat += dist_mat.T
+    dist_mat /= 2
+    # dist_mat /= angle_factor + 1
         
     return dist_mat
