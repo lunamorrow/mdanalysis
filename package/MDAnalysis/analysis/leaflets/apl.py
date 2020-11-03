@@ -51,7 +51,7 @@ def lipid_area(headgroup_coordinate,
             other_coordinates = unwrap_around(other_coordinates,
                                               headgroup_coordinate,
                                               box)
-    points = np.r_[[headgroup_coordinate], neighbor_coordinates]
+    points = np.concatenate([[headgroup_coordinate], neighbor_coordinates])
     points -= headgroup_coordinate
     center = points.mean(axis=0)
     points -= center
@@ -112,6 +112,7 @@ class AreaPerLipid(LeafletAnalysis):
         self.unique_ids = np.unique(self.ids)
         self.resindices = self.residues.resindices
         self.rix2ix = {x.resindex: i for i, x in enumerate(self.residues)}
+        self.rix2hg = {ag.residues[0].resindex: ag for ag in self.headgroups}
         self.n_per_res = np.array([len(x) for x in self.headgroups])
 
         self.rix2ix = {r.resindex:i for i, r in enumerate(self.residues)}
