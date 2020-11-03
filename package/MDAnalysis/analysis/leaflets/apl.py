@@ -51,7 +51,7 @@ def lipid_area(headgroup_coordinate,
             other_coordinates = unwrap_around(other_coordinates,
                                               headgroup_coordinate,
                                               box)
-    points = np.r_[[headgroup_coordinate], neighbor_coordinates]
+    points = np.concatenate([[headgroup_coordinate], neighbor_coordinates])
     points -= headgroup_coordinate
     center = points.mean(axis=0)
     points -= center
@@ -112,6 +112,7 @@ class AreaPerLipid(LeafletAnalysis):
         self.unique_ids = np.unique(self.ids)
         self.resindices = self.residues.resindices
         self.rix2ix = {x.resindex: i for i, x in enumerate(self.residues)}
+        self.rix2hg = {ag.residues[0].resindex: ag for ag in self.headgroups}
         self.n_per_res = np.array([len(x) for x in self.headgroups])
 
     def _prepare(self):
@@ -136,9 +137,12 @@ class AreaPerLipid(LeafletAnalysis):
             atoms = []
             for y in x.residues.resindices:
                 rix2lfi[y] = i
-                if y in self.resindices:
+                try:
+                    atoms.extend(self.rix2hg[y])
+                except KeyError:
+                    pass
+                else:
                     ix.append(self.rix2ix[y])
-                    atoms.extend(self.headgroups[self.rix2ix[y]])
             components.append(np.array(ix))
             leaflets.append(sum(atoms))
 
@@ -181,13 +185,9 @@ class AreaPerLipid(LeafletAnalysis):
             else:
                 other_xyz = None
             res = self.residues[i]
-            try:
-                area = lipid_area(hg_xyz, neighbor_xyz,
-                                other_coordinates=other_xyz,
-                                box=self.selection.dimensions)
-            except:
-                print(i)
-                raise ValueError()
+            area = lipid_area(hg_xyz, neighbor_xyz,
+                            other_coordinates=other_xyz,
+                            box=self.selection.dimensions)
             self.areas[self._frame_index][i] = area
             self.areas_by_attr[lf_i][self.ids[i]].append(area)
 
