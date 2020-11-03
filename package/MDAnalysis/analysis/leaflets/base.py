@@ -46,12 +46,11 @@ class LeafletAnalysis(AnalysisBase):
         self.ids = getattr(self.residues, self.group_by_attr)
         self.update_leaflet_step = update_leaflet_step
 
-        if leafletfinder is not None:
-            self.leafletfinder = leafletfinder
-        else:
+        if leafletfinder is None:
             if "select" not in leaflet_kwargs:
                 leaflet_kwargs = dict(select=select, **leaflet_kwargs)
-            self.leafletfinder = LeafletFinder(universe, **leaflet_kwargs)
+            leafletfinder = LeafletFinder(universe, **leaflet_kwargs)
+        self.leafletfinder = leafletfinder
 
         try:
             assert self.residues.issubset(self.leafletfinder.residues)
@@ -59,6 +58,7 @@ class LeafletAnalysis(AnalysisBase):
             raise ValueError("Residues selected for LeafletFinder "
                              "must include all residues selected for "
                              "leaflet-based analysis")
+        
         self.n_leaflets = self.leafletfinder.n_leaflets
 
     def _update_leaflets(self):

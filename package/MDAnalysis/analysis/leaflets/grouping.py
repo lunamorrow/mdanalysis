@@ -32,7 +32,7 @@ from .utils import (get_centers_by_residue, get_distances_with_projection,
 
 
 def group_by_graph(residues, headgroups, cutoff=15.0, sparse=None, box=None,
-                   **kwargs):
+                   coordinates=None, **kwargs):
     try:
         import networkx as nx
     except ImportError:
@@ -42,7 +42,10 @@ def group_by_graph(residues, headgroups, cutoff=15.0, sparse=None, box=None,
                           "`pip install networkx`.") from None
     returntype = "numpy" if not sparse else "sparse"
 
-    coordinates = get_centers_by_residue(headgroups, box=box)
+    if coordinates is None:
+        coordinates = get_centers_by_residue(headgroups, box=box)
+    else:
+        assert len(coordinates) == len(residues)
 
     try:
         adj = contact_matrix(coordinates, cutoff=cutoff, box=box,
@@ -67,7 +70,7 @@ def group_by_graph(residues, headgroups, cutoff=15.0, sparse=None, box=None,
 
 
 def group_by_dbscan(residues, headgroups, angle_threshold=0.8,
-                    cutoff=20, box=None,
+                    cutoff=20, box=None, coordinates=None,
                     eps=30, min_samples=20, angle_factor=1,
                     **kwargs):
     try:
@@ -78,7 +81,10 @@ def group_by_dbscan(residues, headgroups, angle_threshold=0.8,
                           'install scikit-learn` or `pip install '
                           'scikit-learn`.') from None
     
-    coordinates = get_centers_by_residue(headgroups, box=box)
+    if coordinates is None:
+        coordinates = get_centers_by_residue(headgroups, box=box)
+    else:
+        assert len(coordinates) == len(residues)
     orientations = get_orientations(residues, headgroups, box=box,
                                     headgroup_centers=coordinates,
                                     normalize=True)
@@ -107,7 +113,8 @@ def group_by_dbscan(residues, headgroups, angle_threshold=0.8,
 
 def group_by_spectralclustering(residues, headgroups, n_leaflets=2, delta=20,
                                 cutoff=30, box=None, angle_threshold=0.8,
-                                angle_factor=1, **kwargs):
+                                angle_factor=1, coordinates=None,
+                                **kwargs):
     try:
         import sklearn.cluster as skc
     except ImportError:
@@ -116,7 +123,10 @@ def group_by_spectralclustering(residues, headgroups, n_leaflets=2, delta=20,
                           'install scikit-learn` or `pip install '
                           'scikit-learn`.') from None
     
-    coordinates = get_centers_by_residue(headgroups, box=box)
+    if coordinates is None:
+        coordinates = get_centers_by_residue(headgroups, box=box)
+    else:
+        assert len(coordinates) == len(residues)
     orientations = get_orientations(residues, headgroups, box=box,
                                     headgroup_centers=coordinates,
                                     normalize=True)
@@ -144,8 +154,12 @@ def group_by_orientation(residues, headgroups, n_leaflets=2,
                          cutoff=50, box=None, min_cosine=0.5,
                          max_neighbors=30, max_dist=20,
                          min_lipids=10, angle_factor=0.5,
+                         coordinates=None,
                          relax_dist=10, **kwargs):
-    coordinates = get_centers_by_residue(headgroups, box=box)
+    if coordinates is None:
+        coordinates = get_centers_by_residue(headgroups, box=box)
+    else:
+        assert len(coordinates) == len(residues)
     orientations = get_orientations(residues, headgroups, box=box,
                                     headgroup_centers=coordinates,
                                     normalize=True)
@@ -204,30 +218,37 @@ def group_by_orientation(residues, headgroups, n_leaflets=2,
 
     if n_squash > 0:
         # assume we're keeping the largest ones
-        keep = indices[-n_leaflets:]
-        ditch = list(indices[:-n_leaflets])
-        indices = []
+        # keep = indices[-n_leaflets:]
+        # ditch = list(indices[:-n_leaflets])
+        others = []
         
         # same leaflet as most nearest neighbors
         copy = dist_mat.copy()
         copy[np.diag_indices(len(copy))] = np.inf
-        copy[angles < 0] = np.inf
-        while ditch:
-            ix = ditch.pop(0)
+        copy[angles < min_cosine] = np.inf
+        while len(indices) > (n_leaflets+1):
+            ix = indices.pop(0)
             min_dist = copy[ix].min(axis=0)
             if not sum(min_dist <= max_dist):
-                indices.append(ix)
+                others.append(ix)
                 continue
             nearest = np.argsort(min_dist)
             neighbors = np.where(min_dist[nearest] <= max_dist)[0]
             neighbors = nearest[neighbors]#[:max_neighbors]
             if len(neighbors):
-                counts = [sum(np.isin(neighbors, x)) for x in keep]
+                counts = [sum(np.isin(neighbors, x)) for x in indices]
                 cluster_id = np.argmax(counts)
-                keep[cluster_id] = np.r_[keep[cluster_id], ix]
+                indices[cluster_id] = np.r_[indices[cluster_id], ix]
             else:
                 indices.append(ix)
-        indices.extend(keep)
+
+            indices = sorted(indices, key=lambda x: len(x))
+        # special-case the last one
+        ix = indices.pop(0)
+        keeps = [len(x) for x in indices]
+        cluster_id = np.argmin(keeps)
+        indices[cluster_id] = np.r_[indices[cluster_id], ix]
+        indices.extend(others)
 
     if n_squash < 0:
         raise NotImplementedError("Ehh haven't done this yet")

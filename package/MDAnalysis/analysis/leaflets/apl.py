@@ -24,7 +24,7 @@
 import numpy as np
 
 from .base import LeafletAnalysis
-from .. import distances
+from ..distances import capped_distance
 from ...lib.c_distances import unwrap_around
 
 
@@ -114,6 +114,15 @@ class AreaPerLipid(LeafletAnalysis):
         self.rix2ix = {x.resindex: i for i, x in enumerate(self.residues)}
         self.n_per_res = np.array([len(x) for x in self.headgroups])
 
+        self.rix2ix = {r.resindex:i for i, r in enumerate(self.residues)}
+        self.rix2id = {r.resindex:x for r, x in zip(self.residues, self.ids)}
+
+        self.i2resix = {i:r.resindex
+                        for i, r in enumerate(self.leafletfinder.residues)
+                        if r in self.residues}
+        self._lf_res_i = set(self.i2resix.keys())
+        
+
     def _prepare(self):
         super()._prepare()
         self.areas = np.zeros((self.n_frames, self.n_residues))
@@ -131,65 +140,102 @@ class AreaPerLipid(LeafletAnalysis):
         components = []
         leaflets = []
 
-        for i, x in enumerate(self.leafletfinder.leaflets):
-            ix = []
-            atoms = []
-            for y in x.residues.resindices:
-                rix2lfi[y] = i
-                if y in self.resindices:
-                    ix.append(self.rix2ix[y])
-                    atoms.extend(self.headgroups[self.rix2ix[y]])
-            components.append(np.array(ix))
-            leaflets.append(sum(atoms))
+        for lf_i, comp in enumerate(self.leafletfinder.components):
+            ag_i = sorted(self._lf_res_i & set(comp))
+            coords = self.leafletfinder.coordinates[ag_i]
+            pairs, dist = capped_distance(coords, coords,
+                                          self.cutoff,
+                                          box=box,
+                                          return_distances=True)
+            
+            if not len(pairs):
+                continue
+            pairs = pairs[dist > 0]
+            pi, pj = pairs.T
 
-        hg_coords = [unwrap_around(x.positions.copy(), x.positions.copy()[0], box)
-                     for x in self.headgroups]
-        hg_mean = np.array([x.mean(axis=0) for x in hg_coords])
+            for i, resi in enumerate(ag_i):
+                hg_xyz = coords[i]
+                js = pj[pi == i]
+                neighbor_xyz = coords[js]
 
-        all_wrapped = [hg_mean[x] for x in components]
+                rix = self.i2resix[resi]
+                rid = self.rix2id[rix]
+                ri = self.rix2ix[rix]
+                pairs2 = capped_distance(hg_xyz, other, self.cutoff_other,
+                                         box=box,
+                                         return_distances=False)
+
+                if len(pairs2):
+                    other_xyz = other[np.unique(pairs2[:, 1])]
+                else:
+                    other_xyz = None
+
+                area = lipid_area(hg_xyz, neighbor_xyz,
+                                  other_coordinates=other_xyz,
+                                  box=box)
+                self.areas[self._frame_index][ri] = area
+                self.areas_by_attr[lf_i][rid].append(area)
+
+
+        # for lf_i, x in enumerate(self.leafletfinder.leaflets):
+        #     ix = []
+        #     atoms = []
+        #     for y in x.residues.resindices:
+        #         rix2lfi[y] = i
+        #         if y in self.resindices:
+        #             ix.append(self.rix2ix[y])
+        #             atoms.extend(self.headgroups[self.rix2ix[y]])
+        #     components.append(np.array(ix))
+        #     leaflets.append(sum(atoms))
+
+        # hg_coords = [unwrap_around(x.positions.copy(), x.positions.copy()[0], box)
+        #              for x in self.headgroups]
+        # hg_mean = np.array([x.mean(axis=0) for x in hg_coords])
+
+        # all_wrapped = [hg_mean[x] for x in components]
 
         
-        for i, rix in enumerate(self.resindices):
-            hg_xyz = hg_mean[i]
-            try:
-                lf_i = rix2lfi[rix]
-            except KeyError:
-                self.areas[self._frame_index][i] = np.nan
-                continue
-            potential_xyz = all_wrapped[lf_i]
-            # hg_xyz = self.headgroups[i].positions
-            # potential_xyz = leaflets[lf_i].positions
+        # for i, rix in enumerate(self.resindices):
+        #     hg_xyz = hg_mean[i]
+        #     try:
+        #         lf_i = rix2lfi[rix]
+        #     except KeyError:
+        #         self.areas[self._frame_index][i] = np.nan
+        #         continue
+        #     potential_xyz = all_wrapped[lf_i]
+        #     # hg_xyz = self.headgroups[i].positions
+        #     # potential_xyz = leaflets[lf_i].positions
 
-            pairs, dist = distances.capped_distance(hg_xyz,
-                                                    potential_xyz,
-                                                    self.cutoff,
-                                                    box=self.selection.dimensions,
-                                                    return_distances=True)
+        #     pairs, dist = distances.capped_distance(hg_xyz,
+        #                                             potential_xyz,
+        #                                             self.cutoff,
+        #                                             box=self.selection.dimensions,
+        #                                             return_distances=True)
 
-            if not len(pairs):
-                continue            
-            pairs = pairs[dist>0]
-            js = np.unique(pairs[:, 1])
-            neighbor_xyz = potential_xyz[js]
+        #     if not len(pairs):
+        #         continue            
+        #     pairs = pairs[dist>0]
+        #     js = np.unique(pairs[:, 1])
+        #     neighbor_xyz = potential_xyz[js]
 
-            # get protein / etc ones
-            pairs2 = distances.capped_distance(hg_xyz, other, self.cutoff_other,
-                                               box=self.selection.dimensions,
-                                               return_distances=False)
-            if len(pairs2):
-                other_xyz = other[np.unique(pairs2[:, 1])]
-            else:
-                other_xyz = None
-            res = self.residues[i]
-            try:
-                area = lipid_area(hg_xyz, neighbor_xyz,
-                                other_coordinates=other_xyz,
-                                box=self.selection.dimensions)
-            except:
-                print(i)
-                raise ValueError()
-            self.areas[self._frame_index][i] = area
-            self.areas_by_attr[lf_i][self.ids[i]].append(area)
+        #     # get protein / etc ones
+        #     pairs2 = distances.capped_distance(hg_xyz, other, self.cutoff_other,
+        #                                        box=self.selection.dimensions,
+        #                                        return_distances=False)
+        #     if len(pairs2):
+        #         other_xyz = other[np.unique(pairs2[:, 1])]
+        #     else:
+        #         other_xyz = None
+        #     res = self.residues[i]
+        #     try:
+        #         area = lipid_area(hg_xyz, neighbor_xyz,
+        #                         other_coordinates=other_xyz,
+        #                         box=self.selection.dimensions)
+        #     except:
+        #         print(i)
+        #         raise ValueError()
+        #     self.areas[self._frame_index][i] = area
+        #     self.areas_by_attr[lf_i][self.ids[i]].append(area)
 
     # def _conclude(self):
     #     super()._conclude()

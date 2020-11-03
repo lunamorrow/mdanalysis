@@ -26,6 +26,7 @@ import numpy as np
 from .grouping import (group_by_dbscan, group_by_graph,
                        group_by_spectralclustering,
                        group_by_orientation)
+from .utils import get_centers_by_residue
 
 class LeafletFinder(object):
     """Identify atoms in the same leaflet of a lipid bilayer.
@@ -174,30 +175,35 @@ class LeafletFinder(object):
         else:
             box = None
 
+        self.coordinates = get_centers_by_residue(self.selection, box=box)
+
         clusters = self._method(self.residues,
                                 self.selection,
                                 cutoff=self.cutoff, box=box,
                                 return_predictor=True,
                                 n_leaflets=self.n_leaflets,
+                                coordinates=self.coordinates,
                                 **self.kwargs)
         self.clusters = clusters
-        self.components = self.clusters.clusters_by_size[:self.n_leaflets]
+        components = self.clusters.clusters_by_size[:self.n_leaflets]
 
         if len(self.headgroups) == len(self.selection):
-            self.groups = [self.selection[x] for x in self.components]
+            groups = [self.selection[x] for x in components]
         else:
-            self.groups = [sum(self.headgroups[y] for y in x)
-                           for x in self.components]
-        self.sizes = [len(ag) for ag in self.groups]
+            groups = [sum(self.headgroups[y] for y in x)
+                           for x in components]
 
-        z = [x.center_of_geometry()[-1] for x in self.groups]
-        self.leaflet_order = np.argsort(z)[::-1]
-        self.leaflets = [self.groups[i] for i in self.leaflet_order]
+        positions = [self.coordinates[x] for x in components]
+        means = np.array([x.mean(axis=0) for x in positions])
+        order = np.argsort(means[:, -1])[::-1]
+        self.components = [components[x] for x in order]
+        self.leaflets = [groups[x] for x in order]
+        self.sizes = [len(ag) for ag in self.leaflets]
+        self.positions = [positions[x] for x in order]
 
         
     def __init__(self, universe, select='all', cutoff=None, pbc=True,
-                 method="spectralclustering", n_leaflets=2,
-                 calculate_orientations=False, **kwargs):
+                 method="spectralclustering", n_leaflets=2, **kwargs):
         self.universe = universe.universe
         self.select = select
         self.selection = universe.atoms.select_atoms(select, periodic=pbc)
