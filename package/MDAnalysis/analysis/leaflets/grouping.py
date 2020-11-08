@@ -149,17 +149,56 @@ def group_by_spectralclustering(residues, headgroups, n_leaflets=2, delta=20,
     clusters.run(ker)
     return clusters
 
+def sort_clusters(sorted_dist, min_cosine, max_dist, max_neighbors, sorted_angles, groups, sorted_ix):
+    # nearests = np.argsort(dist_mat, axis=1)
+    # print("max_dist:", max_dist, "min_cosine::", min_cosine)
+    valid = (sorted_dist <= max_dist) & (sorted_angles > min_cosine)
+
+    # dists = np.argsort(dist_mat[valid], axis=1)
+    # print(dists)
+    # nearests =  indices[dists]#[:, :max_neighbors]
+    # print(nearests)
+
+    for i, valid_ in enumerate(valid):
+        # order = nb_order[i]
+        nearest = sorted_ix[i][valid_]
+        # nearest = nb_ix[i][order][valid_[order]]
+        # direction = angles[i][nearest] > min_cosine
+        # within_min_dist = row[nearest] <= max_dist
+        # neighbors = nearest[within_min_dist & direction][:max_neighbors]
+        neighbors = nearest[:max_neighbors]
+
+        common = np.bincount(groups[neighbors])
+        common = common.argmax()
+        groups[neighbors] = common
+        # print(len(neighbors), len(np.unique(groups)))
+
+def sort_clusters_(dists, angs, min_cosine, max_dist, max_neighbors, groups, new_ix):
+    for i, row in enumerate(dists):
+        direction = angs[i] > min_cosine
+        within_min_dist = row <= max_dist
+        mask = direction & within_min_dist
+        nearest = new_ix[i][mask]
+        # nearest = new_ix[mask]
+        nearest = nearest[np.argsort(row[mask])]
+        neighbors = nearest[:max_neighbors]
+        # neighbors = nearest[within_min_dist & direction][:max_neighbors]
+        common = np.bincount(groups[neighbors])
+        common = common.argmax()
+
+        # ids, counts = np.unique(groups[neighbors], )
+        groups[neighbors] = common
 
 def group_by_orientation(residues, headgroups, n_leaflets=2,
-                         cutoff=50, box=None, min_cosine=0.5,
-                         max_neighbors=30, max_dist=20,
-                         min_lipids=10, angle_factor=0.5,
-                         coordinates=None,
-                         relax_dist=10, **kwargs):
+                         cutoff=50, box=None, min_cosine=0.3,
+                         max_neighbors=20, max_dist=40,
+                         min_lipids=5, angle_factor=5,
+                         coordinates=None, **kwargs):
+    n_coordinates = len(coordinates)
     if coordinates is None:
         coordinates = get_centers_by_residue(headgroups, box=box)
     else:
-        assert len(coordinates) == len(residues)
+        assert n_coordinates == len(residues)
     orientations = get_orientations(residues, headgroups, box=box,
                                     headgroup_centers=coordinates,
                                     normalize=True)
@@ -167,93 +206,126 @@ def group_by_orientation(residues, headgroups, n_leaflets=2,
 
     dist_mat = get_distances_with_projection(coordinates, orientations,
                                              cutoff, box=box,
+                                             angles=angles,
                                              angle_factor=angle_factor,
                                              average_neighbors=min_lipids-1,
                                              max_dist=max_dist,
                                              average_orientations=True)
     
-    groups = np.arange(len(coordinates))
-    row_ix = np.arange(len(coordinates))
+    groups = np.arange(n_coordinates)
     old_min_cosine = min_cosine
+    row_ix = np.arange(n_coordinates)
 
-    def sort_clusters():
-        for i, row in enumerate(dist_mat):
-            nearest = np.argsort(row)
-            direction = angles[i][nearest] > min_cosine
-            within_min_dist = row[nearest] <= max_dist
-            neighbors = nearest[within_min_dist & direction][:max_neighbors]
-            common = np.bincount(groups[neighbors]).argmax()
-            groups[neighbors] = common
+    mask = (dist_mat <= (max_dist * 2)) & (angles > 0)
+    new_ix = [row_ix[x] for x in mask]
+    dists = [d[x] for d, x in zip(dist_mat, new_ix)]
+    angs = [a[x] for a, x in zip(angles, new_ix)]
+
+    # dists = dist_mat
+    # angs = angles
+    # new_ix = row_ix
+
+    dist_order = [np.argsort(x) for x in dists]
+    dists = [d[x] for d, x in zip(dists, dist_order)]
+    angs = [a[x] for a, x in zip(angs, dist_order)]
+    new_ix = [i[x] for i, x in zip(new_ix, dist_order)]
+
+    # def sort_clusters_():
+    #     for i, row in enumerate(dists):
+    #         direction = angs[i] > min_cosine
+    #         within_min_dist = row <= max_dist
+    #         mask = direction & within_min_dist
+    #         nearest = new_ix[i][mask][np.argsort(row[mask])]
+    #         neighbors = nearest[:max_neighbors]
+    #         # neighbors = nearest[within_min_dist & direction][:max_neighbors]
+    #         common = np.bincount(groups[neighbors]).argmax()
+    #         groups[neighbors] = common
+
+        # for i, row in enumerate(dist_mat):
+        #     # nearest = np.argsort(row)
+        #     direction = angles[i] > min_cosine
+        #     within_min_dist = row <= max_dist
+        #     mask = direction & within_min_dist
+        #     nearest = row_ix[mask][np.argsort(row[mask])]
+        #     neighbors = nearest[:max_neighbors]
+        #     # neighbors = nearest[within_min_dist & direction][:max_neighbors]
+        #     common = np.bincount(groups[neighbors]).argmax()
+        #     groups[neighbors] = common
+
+
+    # nb_ix = np.tile(groups, (n_coordinates, 1))
+    # nb_order = np.argsort(dist_mat, axis=1)
+
+    # sorted_dist = np.array([x[y] for x, y in zip(dist_mat, nb_order)])
+    # sorted_angles = np.array([x[y] for x, y in zip(angles, nb_order)])
+    # sorted_ix = np.array([x[y] for x, y in zip(nb_ix, nb_order)])
     
-    min_cosine += 0.3
-    sort_clusters()
+    # min_cosine += 0.3
+    sort_clusters_(dists, angs, min_cosine, max_dist, max_neighbors, groups, new_ix)
+    # sort_clusters(sorted_dist, min_cosine, max_dist, max_neighbors, sorted_angles, groups, sorted_ix)
     old_max_dist = max_dist
+    old_min_cosine = min_cosine
     
     ids, counts = np.unique(groups, return_counts=True)
     outliers = counts < min_lipids
     n_squash = len(ids[~outliers]) - n_leaflets
-    if n_squash > 0:
-        old_n = n_squash + 1
-        n_dist = 10
-        
-        old_max_neighbors = max_neighbors
-        n_cosine = 8
-        while n_squash > 0 and (n_dist or n_cosine or old_n > n_squash):
-            max_neighbors += 1
-            old_n = n_squash
-            sort_clusters()
-            ids, counts = np.unique(groups, return_counts=True)
-            outliers = counts < min_lipids
-            n_squash = len(ids[~outliers]) - n_leaflets
-            if n_dist:
-                n_dist -= 1
-                max_dist += (relax_dist * 0.1)
-            if n_cosine:
-                n_cosine -= 1
-                min_cosine -= 0.05
+    n_sorts = 3
+
+    while n_squash > 0 and n_sorts:
+        sort_clusters_(dists, angs, min_cosine, max_dist, max_neighbors, groups, new_ix)
+        # sort_clusters(sorted_dist, min_cosine, max_dist, max_neighbors, sorted_angles, groups, sorted_ix)
+        ids, counts = np.unique(groups, return_counts=True)
+        outliers = counts < min_lipids
+        n_squash = len(ids[~outliers]) - n_leaflets
+        max_dist *= 1.2
+        min_cosine -= 0.1
+        n_sorts -= 1
 
     min_cosine = old_min_cosine
     max_dist = old_max_dist
+    ids, counts = np.unique(groups, return_counts=True)
+    outliers = counts < min_lipids
+    n_squash = len(ids[~outliers]) - n_leaflets
     indices = [np.where(groups == i)[0] for i in ids[np.argsort(counts)]]
 
     if n_squash > 0:
-        # assume we're keeping the largest ones
-        # keep = indices[-n_leaflets:]
-        # ditch = list(indices[:-n_leaflets])
         others = []
         
         # same leaflet as most nearest neighbors
         copy = dist_mat.copy()
         copy[np.diag_indices(len(copy))] = np.inf
         copy[angles < min_cosine] = np.inf
-        while len(indices) > (n_leaflets+1):
+
+        while len(indices) > (n_leaflets+0):
             ix = indices.pop(0)
             min_dist = copy[ix].min(axis=0)
-            if not sum(min_dist <= max_dist):
-                others.append(ix)
-                continue
             nearest = np.argsort(min_dist)
+            # neighbors = np.unique(np.where(copy[ix] <= max_dist)[1])
+            # neighbors = [x for x in neighbors if x not in ix]
+
             neighbors = np.where(min_dist[nearest] <= max_dist)[0]
-            neighbors = nearest[neighbors]#[:max_neighbors]
+            neighbors = nearest[neighbors]
+            # print(neighbors, min_dist[neighbors])
+            # print(min_dist[nearest[neighbors]])
+            # neighbors = nearest[neighbors]
+            # neighbors = np.unique(nearest[neighbors])#[:max_neighbors]
+            neighbors = [x for x in neighbors if x not in ix]
+            # print(np.min(min_dist), min_dist[neighbors])
+            # neighbors = nearest[neighbors][:max_neighbors]
             if len(neighbors):
                 counts = [sum(np.isin(neighbors, x)) for x in indices]
                 cluster_id = np.argmax(counts)
                 indices[cluster_id] = np.r_[indices[cluster_id], ix]
             else:
-                indices.append(ix)
+                others.append(ix)
 
-            indices = sorted(indices, key=lambda x: len(x))
-        # special-case the last one
-        ix = indices.pop(0)
-        keeps = [len(x) for x in indices]
-        cluster_id = np.argmin(keeps)
-        indices[cluster_id] = np.r_[indices[cluster_id], ix]
+            indices = sorted(indices, key=len)
         indices.extend(others)
 
     if n_squash < 0:
         raise NotImplementedError("Ehh haven't done this yet")
 
-    groups = sorted(indices, key=lambda x: len(x), reverse=True)
+    groups = sorted(indices, key=len, reverse=True)
     if len(groups) > n_leaflets:
         # combine outliers
         outliers = np.concatenate(groups[n_leaflets:])

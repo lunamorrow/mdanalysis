@@ -59,6 +59,7 @@ cdef extern from "calc_distances.h":
     void _triclinic_pbc(coordinate* coords, int numcoords, float* box)
     void minimum_image(double* x, float* box, float* inverse_box)
     void _unwrap_around(coordinate* coords, int numCoords, float* center, float* box)
+    void _mean_unwrap_around(coordinate* coords, float* mean, int numCoords, float* center, float* box)
     void _calc_cosine_similarity(coordinate* vec1, int numVec1, coordinate* vec2, int numVec2, double* cosines)
 
 OPENMP_ENABLED = True if USED_OPENMP else False
@@ -232,6 +233,18 @@ def unwrap_around(numpy.ndarray coords, numpy.ndarray center,
     _unwrap_around(<coordinate*> coords.data, numcoords,
                    <float*> center.data, <float*> box.data)
     return coords
+
+def mean_unwrap_around(numpy.ndarray coords, numpy.ndarray center,
+                       numpy.ndarray box):
+    cdef int numcoords
+    cdef numpy.ndarray[numpy.float32_t, ndim=1] mean = numpy.zeros(3, dtype=numpy.float32)
+    mean = numpy.ascontiguousarray(mean)
+    coords = numpy.ascontiguousarray(coords)
+    numcoords = coords.shape[0]
+
+    _mean_unwrap_around(<coordinate*> coords.data, <float*> mean.data, numcoords,
+                        <float*> center.data, <float*> box.data)
+    return mean
 
 def calc_cosine_similarity(numpy.ndarray vectors1, numpy.ndarray vectors2):
     vectors1 = numpy.ascontiguousarray(vectors1)

@@ -888,6 +888,35 @@ static void _unwrap_around(coordinate* coords, int numCoords,
   }
 }
 
+static float* _mean_unwrap_around(coordinate* coords, float* mean,
+                                int numCoords, float* center, float* box)
+{
+  // Unwrap coordinates to around the proposed center
+  float half_x = box[0] * 0.5;
+  float half_y = box[1] * 0.5;
+  float half_z = box[2] * 0.5;
+
+  for (int i = 0; i < numCoords; i++) {
+    float dx = coords[i][0] - center[0];
+    float dy = coords[i][1] - center[1];
+    float dz = coords[i][2] - center[2];
+
+    // subtract (sign of difference) * (magnitude of box) if 
+    // difference is greater than half the box
+    float ux = (fabs(dx) > half_x) * copysign(box[0], dx);
+    float uy = (fabs(dy) > half_y) * copysign(box[1], dy);
+    float uz = (fabs(dz) > half_z) * copysign(box[2], dz);
+
+    mean[0] += coords[i][0] - ux;
+    mean[1] += coords[i][1] - uy;
+    mean[2] += coords[i][2] - uz;
+  }
+
+  mean[0] /= numCoords;
+  mean[1] /= numCoords;
+  mean[2] /= numCoords;
+}
+
 static inline double _calc_norm_vec3(float* vec)
 {
   return sqrt(vec[0]*vec[0] + vec[1]*vec[1] + vec[2]*vec[2]);
@@ -904,6 +933,7 @@ void _calc_cosine_similarity(coordinate* vec1, int numVec1,
                              double* cosines)
 {
   double norm2[numVec2];
+  double sim;
 
   for (int j=0; j<numVec2; j++) {
     norm2[j] = _calc_norm_vec3(vec2[j]);
@@ -912,7 +942,13 @@ void _calc_cosine_similarity(coordinate* vec1, int numVec1,
   for (int i=0; i<numVec1; i++) {
     double norm_i = _calc_norm_vec3(vec1[i]);
     for (int j=0; j<numVec2; j++) {
-      *(cosines + i*numVec2 + j) = _calc_dot_vec3(vec1[i], vec2[j]) / (norm_i * norm2[j]);
+      double norm_ij = norm_i * norm2[j];
+      if (norm_ij > 0) {
+        sim = _calc_dot_vec3(vec1[i], vec2[j]) / norm_ij;
+      } else {
+        sim = 1;
+      }
+      *(cosines + i*numVec2 + j) = sim;
     }
   }
 }

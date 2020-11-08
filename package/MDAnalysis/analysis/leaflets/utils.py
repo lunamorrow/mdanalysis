@@ -24,16 +24,26 @@
 import numpy as np
 
 from ..distances import capped_distance
-from ...lib.c_distances import unwrap_around, calc_cosine_similarity
+from ...lib.mdamath import norm
+from ...lib.c_distances import unwrap_around, mean_unwrap_around, calc_cosine_similarity
 
 def get_centers_by_residue(selection, centers=None, box=None):
     if box is None:
         return selection.center(None, compound='residues', pbc=False)
-    sel = [x.positions.copy() for x in selection.split('residue')]
+    # res = selection.split('residue')
+    # sel = [x.positions for x in res]
+    # print(np.ediff1d(selection.resindices))
+    splix = np.where(np.ediff1d(selection.resindices))[0]+1
+    sel = np.split(selection.positions, splix)
     if centers is None:
         centers = [x[0] for x in sel]
-    uw = [unwrap_around(x, c, box) for x, c in zip(sel, centers)]
-    return np.array([x.mean(axis=0) for x in uw])
+
+    
+    # uw = [unwrap_around(x, c, box) for x, c in zip(sel, centers)]
+    # unwrapped = np.array([x.mean(axis=0) for x in uw])
+    # print(unwrapped)
+    unwrapped = np.array([mean_unwrap_around(x, c, box) for x, c in zip(sel, centers)])
+    return unwrapped
 
 
 def get_orientations(residues, headgroups, box=None, headgroup_centers=None,
@@ -50,9 +60,39 @@ def get_orientations(residues, headgroups, box=None, headgroup_centers=None,
     return orientations
 
 
+def average_near_orientations(orientations, pairs, dists, average_neighbors=0,
+                              max_dist=30, angles=None):
+    if angles is None:
+        angles = np.dot(orientations, orientations.T)
+    
+    mask = (dists <= max_dist) & (angles[tuple(pairs.T)] > 0)
+    dists = dists[mask]
+    pairs = pairs[mask]
+
+    splix = np.where(np.ediff1d(pairs[:, 0]))[0] + 1
+    plist = np.split(pairs, splix)
+    dlist = np.split(dists, splix)
+
+    for p, d in zip(plist, dlist):
+        i = p[0, 0]
+        js = p[1:, 1]  # first is self-to-self
+        d = d[1:]
+
+        dist_order = np.argsort(d)
+        nearest_j = js[dist_order][:average_neighbors]
+        nearest = orientations[nearest_j]
+        vec = orientations[i]
+        vec += nearest.sum(axis=0)
+        vec /= norm(vec)
+        orientations[i] = vec
+    
+
+
+
+
 def get_distances_with_projection(coordinates, orientations, cutoff, box=None,
                                   angle_factor=1, average_neighbors=0,
-                                  max_dist=30,
+                                  max_dist=30, angles=None,
                                   average_orientations=False):
     n_coordinates = len(coordinates)
     # set up distance matrix
@@ -62,11 +102,22 @@ def get_distances_with_projection(coordinates, orientations, cutoff, box=None,
     pairs, dists = capped_distance(coordinates, coordinates, cutoff, box=box,
                                   return_distances=True)
     pi, pj = tuple(pairs.T)
+    # dist_mat[pi, pj] = dists
+
 
     # split pairs + distances by residue
     splix = np.where(np.ediff1d(pairs[:, 0]))[0] + 1
     plist = np.split(pairs, splix)
     dlist = np.split(dists, splix)
+
+    if average_orientations and average_neighbors:
+        average_near_orientations(orientations, pairs, dists,
+                                  average_neighbors=average_neighbors,
+                                  max_dist=max_dist, angles=angles)
+        # if angles is None:
+        #     angles = np.dot(orientations, orientations.T)
+
+        # row = np.arange(n_coordinates)
 
     # project distances onto orientation vector
     for p, d in zip(plist, dlist):
@@ -81,25 +132,44 @@ def get_distances_with_projection(coordinates, orientations, cutoff, box=None,
         neigh_ -= i_coord
         
         vec = orientations[[i]]
-        if average_orientations:
-            dist_order = np.argsort(d)
-            within_threshold = d[dist_order] <= max_dist
-            nearest_j = js[dist_order[within_threshold][:average_neighbors]]
-            nearest = orientations[nearest_j]
+        # if average_orientations and average_neighbors:
+        #     # within_threshold = d <= max_dist
+        #     # acute = angles[i][js] > 0
+        #     # mask = within_threshold & acute
+        #     # dist_order = np.argsort(d[mask])
+        #     # nearest_j = js[mask][dist_order][:average_neighbors]
 
-            neigh_orients = np.array([vec] + list(nearest))
-            vec = neigh_orients.mean(axis=0)
-            vec /= np.linalg.norm(vec)
-            orientations[i] = vec
+
+
+
+        #     dist_order = np.argsort(d)
+        #     within_threshold = d[dist_order] <= max_dist
+        #     acute = angles[i][js[dist_order]] > 0
+        #     mask = within_threshold & acute
+        #     nearest_j = js[dist_order[mask][:average_neighbors]]
+        #     nearest = orientations[nearest_j]
+        #     # print(angles[i][js[dist_order]])
+        #     # print(nearest)
+
+        #     neigh_orients = np.array([vec] + list(nearest))
+        #     vec = neigh_orients.mean(axis=0)
+        #     # vec += nearest.sum(axis=0)
+        #     vec /= norm(vec[0])
+        #     orientations[i] = vec
 
         ang_ = calc_cosine_similarity(vec, neigh_)
-        ang_ = np.nan_to_num(ang_, nan=1)
+        # ang_ = np.nan_to_num(ang_, nan=1)
         
         proj = np.abs(d * ang_)
-        dist_mat[i, js] = proj * angle_factor + d
+        half = (proj * angle_factor)[0] #/ 2
+        dist_mat[i, js] = half + d
+        # dist_mat[js, i] += half
 
     dist_mat += dist_mat.T
     dist_mat /= 2
     # dist_mat /= angle_factor + 1
+
+    # dist_mat[dist_mat == 0] = filler
+    # dist_mat[np.diag_indices(n_coordinates)] = 0
         
     return dist_mat
