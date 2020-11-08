@@ -99,8 +99,9 @@ def lipid_area(headgroup_coordinate,
 class AreaPerLipid(LeafletAnalysis):
 
     def __init__(self, universe, *args, cutoff=50, cutoff_other=None, select_other=None,
-                 **kwargs):
+                 max_neighbors=100, **kwargs):
         super().__init__(universe, *args, **kwargs)
+        self.max_neighbors = max_neighbors
         if select_other is None:
             self.other = (self.universe.residues - self.residues).atoms
         else:
@@ -144,20 +145,38 @@ class AreaPerLipid(LeafletAnalysis):
         for lf_i, comp in enumerate(self.leafletfinder.components):
             ag_i = sorted(self._lf_res_i & set(comp))
             coords = self.leafletfinder.coordinates[ag_i]
-            pairs, dist = capped_distance(coords, coords,
-                                          self.cutoff,
-                                          box=box,
-                                          return_distances=True)
+            pairs, dists = capped_distance(coords, coords,
+                                           self.cutoff,
+                                           box=box,
+                                           return_distances=True)
             
             if not len(pairs):
                 continue
-            pairs = pairs[dist > 0]
-            pi, pj = pairs.T
+            # pairs = pairs[dist > 0]
+            # dists = dists[dist > 0]
+            splix = np.where(np.ediff1d(pairs[:, 0]))[0] + 1
+            plist = np.split(pairs, splix)
+            dlist = np.split(dists, splix)
+
+            d_order = [np.argsort(x) for x in dlist]
+            plist = [p[x] for p, x in zip(plist, d_order)]
+
+            # splix = np.where(np.ediff1d(pi))[0]+1
+            # pi = np.split(pi, splix)
+            # pj = np.split(pj, splix)
+            # dist = np.split(dist, splix)
+            # dist_order = [np.argsort(x) for x in dist]
+            # i2j = {i[0]:j[d] for i, j, d in zip(pi, pj, dist_order)}
+            i2j = {p[0, 0]: p[1:, 1] for p in plist}
 
             for i, resi in enumerate(ag_i):
                 hg_xyz = coords[i]
-                js = pj[pi == i]
-                neighbor_xyz = coords[js]
+                # js = pj[pi == i]
+                try:
+                    js = i2j[i]
+                except KeyError:
+                    continue
+                neighbor_xyz = coords[js[:self.max_neighbors]]
 
                 rix = self.i2resix[resi]
                 rid = self.rix2id[rix]

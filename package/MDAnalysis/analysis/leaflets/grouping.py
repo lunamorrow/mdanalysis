@@ -180,7 +180,7 @@ def sort_clusters_(dists, angs, min_cosine, max_dist, max_neighbors, groups, new
         mask = direction & within_min_dist
         nearest = new_ix[i][mask]
         # nearest = new_ix[mask]
-        nearest = nearest[np.argsort(row[mask])]
+        # nearest = nearest[np.argsort(row[mask])]
         neighbors = nearest[:max_neighbors]
         # neighbors = nearest[within_min_dist & direction][:max_neighbors]
         common = np.bincount(groups[neighbors])
