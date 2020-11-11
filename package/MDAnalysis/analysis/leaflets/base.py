@@ -60,6 +60,12 @@ class LeafletAnalysis(AnalysisBase):
                              "leaflet-based analysis")
         
         self.n_leaflets = self.leafletfinder.n_leaflets
+        lf_res = list(self.leafletfinder.residues)
+        self._a2lf = np.array([lf_res.index(x) for x in self.residues])
+        self._lf2a = np.ones(self.leafletfinder.n_residues, dtype=int) * -1
+        self._lf2a[self._a2lf] = np.arange(self.n_residues)
+        
+
 
     def _update_leaflets(self):
         self.leafletfinder.run()
