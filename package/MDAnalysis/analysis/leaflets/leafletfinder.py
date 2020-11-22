@@ -200,6 +200,10 @@ class LeafletFinder(object):
         self.leaflets = [groups[x] for x in order]
         self.sizes = [len(ag) for ag in self.leaflets]
         self.positions = [positions[x] for x in order]
+        self.i2comp = {}
+        for i, comp in enumerate(components):
+            for j in comp:
+                self.i2comp[j] = i
 
         
     def __init__(self, universe, select='all', cutoff=None, pbc=True,
