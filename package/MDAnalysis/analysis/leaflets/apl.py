@@ -124,7 +124,38 @@ def lipid_area(headgroup_coordinate,
                neighbor_coordinates,
                other_coordinates=None,
                box=None, plot=False):
-    from scipy.spatial import Voronoi, voronoi_plot_2d
+    """
+    Calculate the area of a lipid by projecting it onto a plane with
+    neighboring coordinates and creating a Voronoi diagram.
+
+    Parameters
+    ----------
+    headgroup_coordinate: numpy.ndarray
+        Coordinate array of shape (3,) or (n, 3) of the central lipid
+    neighbor_coordinates: numpy.ndarray
+        Coordinate array of shape (n, 3) of neighboring lipids to the central lipid.
+        These coordinates are used to construct the plane of best fit.
+    other_coordinates: numpy.ndarray (optional)
+        Coordinate array of shape (n, 3) of neighboring atoms to the central lipid.
+        These coordinates are *not* used to construct the plane of best fit, but
+        are projected onto it.
+    box: numpy.ndarray (optional)
+        Box of minimum cell, used for unwrapping coordinates.
+    plot: bool (optional)
+        Whether to plot the resulting Voronoi diagram.
+
+    Returns
+    -------
+    area: float
+        Area of the central lipid
+    
+    Raises
+    ------
+    ValueError
+        If a Voronoi cell cannot be constructed for the central lipid, usually
+        because too few neighboring lipids have been given.
+    """
+    from scipy.spatial import Voronoi
     
     # preprocess coordinates
     headgroup_coordinate = np.asarray(headgroup_coordinate)
@@ -160,17 +191,13 @@ def lipid_area(headgroup_coordinate,
     headgroup_cell_int = vor.point_region[0]
     headgroup_cell = vor.regions[headgroup_cell_int]
     if plot:
+        from scipy.spatial import voronoi_plot_2d
         import matplotlib.pyplot as plt
         fig = voronoi_plot_2d(vor, show_vertices=False, line_alpha=0.6)
         plt.plot([vor.points[0][0]], [vor.points[0][1]], 'r+', markersize=12)
         plt.show()
 
     if not all(vertex != -1 for vertex in headgroup_cell):
-        print(len(neighbor_coordinates))
-        import matplotlib.pyplot as plt
-        fig = voronoi_plot_2d(vor, show_vertices=False, line_alpha=0.6)
-        plt.plot([vor.points[0][0]], [vor.points[0][1]], 'r+', markersize=12)
-        plt.show()
         raise ValueError("headgroup not bounded by Voronoi cell points: "
                             f"{headgroup_cell}. "
                             "Try including more neighbor points")
@@ -190,6 +217,13 @@ def lipid_area(headgroup_coordinate,
 
 
 class AreaPerLipid(LeafletAnalysis):
+    """
+    Calculate the area of each lipid by projecting it onto a plane with
+    neighboring coordinates and creating a Voronoi diagram.
+
+    Parameters
+    ----------
+    """
 
     def __init__(self, universe, *args, cutoff=50, cutoff_other=None, select_other=None,
                  max_neighbors=100, **kwargs):
@@ -205,7 +239,6 @@ class AreaPerLipid(LeafletAnalysis):
         self.cutoff_other = cutoff_other
         self.unique_ids = np.unique(self.ids)
         self.resindices = self.residues.resindices
-        self.rix2ix = {x.resindex: i for i, x in enumerate(self.residues)}
         self.rix2hg = {ag.residues[0].resindex: ag for ag in self.headgroups}
         self.n_per_res = np.array([len(x) for x in self.headgroups])
 

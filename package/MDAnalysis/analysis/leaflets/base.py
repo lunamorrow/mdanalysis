@@ -25,6 +25,7 @@ import logging
 import numpy as np
 
 from ..base import AnalysisBase, ProgressBar
+from MDAnalysis.analysis.leaflets.leafletfinder import LeafletFinder
 
 
 logger = logging.getLogger(__name__)
