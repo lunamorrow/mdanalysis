@@ -233,11 +233,11 @@ class LeafletFinder(object):
         else:
             self._method = self.method = method
 
-        if cutoff is None or cutoff < 0:
-            cutoff = self._guess_cutoff(cutoff)
-        elif not isinstance(cutoff, (int, float)):
-            raise ValueError("cutoff must be an int, float, or 'guess'. "
-                             f"Given: {cutoff}")
+        # if cutoff is None or cutoff < 0:
+        #     cutoff = self._guess_cutoff(cutoff)
+        # elif not isinstance(cutoff, (int, float)):
+        #     raise ValueError("cutoff must be an int, float, or 'guess'. "
+        #                      f"Given: {cutoff}")
         self.cutoff = cutoff
         self.run()
 
