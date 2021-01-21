@@ -274,136 +274,140 @@ class AreaPerLipid(LeafletAnalysis):
             assert -1 not in self_i
             coords = self.leafletfinder.coordinates[ag_i]
 
-            areas = leaflet_apl(coords, box=box, cutoff=self.cutoff)
-            self.areas[self._frame_index][self_i] = areas
+            # areas = leaflet_apl(coords, box=box, cutoff=self.cutoff)
+            # self.areas[self._frame_index][self_i] = areas
 
-            for rid, area in zip(self.ids[self_i], areas):
-                self.areas_by_attr[lf_i][rid].append(area)
+            # for rid, area in zip(self.ids[self_i], areas):
+            #     self.areas_by_attr[lf_i][rid].append(area)
 
     #         raise ValueError()
 
 
 
 
-    #         pairs, dists = capped_distance(coords, coords,
-    #                                        self.cutoff,
-    #                                        box=box,
-    #                                        return_distances=True)
+            pairs, dists = capped_distance(coords, coords,
+                                           self.cutoff,
+                                           box=box,
+                                           return_distances=True)
             
-    #         if not len(pairs):
-    #             continue
-    #         # pairs = pairs[dist > 0]
-    #         # dists = dists[dist > 0]
-    #         splix = np.where(np.ediff1d(pairs[:, 0]))[0] + 1
-    #         plist = np.split(pairs, splix)
-    #         dlist = np.split(dists, splix)
+            if not len(pairs):
+                continue
+            # pairs = pairs[dist > 0]
+            # dists = dists[dist > 0]
+            splix = np.where(np.ediff1d(pairs[:, 0]))[0] + 1
+            plist = np.split(pairs, splix)
+            dlist = np.split(dists, splix)
 
-    #         d_order = [np.argsort(x) for x in dlist]
-    #         plist = [p[x] for p, x in zip(plist, d_order)]
+            d_order = [np.argsort(x) for x in dlist]
+            plist = [p[x] for p, x in zip(plist, d_order)]
 
-    #         # splix = np.where(np.ediff1d(pi))[0]+1
-    #         # pi = np.split(pi, splix)
-    #         # pj = np.split(pj, splix)
-    #         # dist = np.split(dist, splix)
-    #         # dist_order = [np.argsort(x) for x in dist]
-    #         # i2j = {i[0]:j[d] for i, j, d in zip(pi, pj, dist_order)}
-    #         i2j = {p[0, 0]: p[1:, 1] for p in plist}
+            # splix = np.where(np.ediff1d(pi))[0]+1
+            # pi = np.split(pi, splix)
+            # pj = np.split(pj, splix)
+            # dist = np.split(dist, splix)
+            # dist_order = [np.argsort(x) for x in dist]
+            # i2j = {i[0]:j[d] for i, j, d in zip(pi, pj, dist_order)}
+            i2j = {p[0, 0]: p[1:, 1] for p in plist}
 
-    #         for i, resi in enumerate(ag_i):
-    #             hg_xyz = coords[i]
-    #             # js = pj[pi == i]
-    #             try:
-    #                 js = i2j[i]
-    #             except KeyError:
-    #                 continue
-    #             neighbor_xyz = coords[js[:self.max_neighbors]]
+            for i, resi in enumerate(ag_i):
+                hg_xyz = coords[i]
+                # js = pj[pi == i]
+                try:
+                    js = i2j[i]
+                except KeyError:
+                    continue
+                neighbor_xyz = coords[js[:self.max_neighbors]]
 
-    #             rix = self.i2resix[resi]
-    #             rid = self.rix2id[rix]
-    #             ri = self.rix2ix[rix]
-    #             pairs2 = capped_distance(hg_xyz, other, self.cutoff_other,
-    #                                      box=box,
-    #                                      return_distances=False)
+                rix = self.i2resix[resi]
+                rid = self.rix2id[rix]
+                ri = self.rix2ix[rix]
+                pairs2 = capped_distance(hg_xyz, other, self.cutoff_other,
+                                         box=box,
+                                         return_distances=False)
 
-    #             if len(pairs2):
-    #                 other_xyz = other[np.unique(pairs2[:, 1])]
-    #             else:
-    #                 other_xyz = None
+                if len(pairs2):
+                    other_xyz = other[np.unique(pairs2[:, 1])]
+                else:
+                    other_xyz = None
 
-    #             area = lipid_area(hg_xyz, neighbor_xyz,
-    #                               other_coordinates=other_xyz,
-    #                               box=box)
-    #             self.areas[self._frame_index][ri] = area
-    #             self.areas_by_attr[lf_i][rid].append(area)
+                area = lipid_area(hg_xyz, neighbor_xyz,
+                                  other_coordinates=other_xyz,
+                                  box=box)
+                if area > 0:
+                    self.areas[self._frame_index][ri] = area
+                    self.areas_by_attr[lf_i][rid].append(area)
 
 
-    #     # for lf_i, x in enumerate(self.leafletfinder.leaflets):
-    #     #     ix = []
-    #     #     atoms = []
-    #     #     for y in x.residues.resindices:
-    #     #         rix2lfi[y] = i
-    #     #         if y in self.resindices:
-    #     #             ix.append(self.rix2ix[y])
-    #     #             atoms.extend(self.headgroups[self.rix2ix[y]])
-    #     #     components.append(np.array(ix))
-    #     #     leaflets.append(sum(atoms))
+        # for lf_i, x in enumerate(self.leafletfinder.leaflets):
+        #     ix = []
+        #     atoms = []
+        #     for y in x.residues.resindices:
+        #         rix2lfi[y] = i
+        #         if y in self.resindices:
+        #             ix.append(self.rix2ix[y])
+        #             atoms.extend(self.headgroups[self.rix2ix[y]])
+        #     components.append(np.array(ix))
+        #     leaflets.append(sum(atoms))
 
-    #     # hg_coords = [unwrap_around(x.positions.copy(), x.positions.copy()[0], box)
-    #     #              for x in self.headgroups]
-    #     # hg_mean = np.array([x.mean(axis=0) for x in hg_coords])
+        # hg_coords = [unwrap_around(x.positions.copy(), x.positions.copy()[0], box)
+        #              for x in self.headgroups]
+        # hg_mean = np.array([x.mean(axis=0) for x in hg_coords])
 
-    #     # all_wrapped = [hg_mean[x] for x in components]
+        # all_wrapped = [hg_mean[x] for x in components]
 
         
-    #     # for i, rix in enumerate(self.resindices):
-    #     #     hg_xyz = hg_mean[i]
-    #     #     try:
-    #     #         lf_i = rix2lfi[rix]
-    #     #     except KeyError:
-    #     #         self.areas[self._frame_index][i] = np.nan
-    #     #         continue
-    #     #     potential_xyz = all_wrapped[lf_i]
-    #     #     # hg_xyz = self.headgroups[i].positions
-    #     #     # potential_xyz = leaflets[lf_i].positions
+        # for i, rix in enumerate(self.resindices):
+        #     hg_xyz = hg_mean[i]
+        #     try:
+        #         lf_i = rix2lfi[rix]
+        #     except KeyError:
+        #         self.areas[self._frame_index][i] = np.nan
+        #         continue
+        #     potential_xyz = all_wrapped[lf_i]
+        #     # hg_xyz = self.headgroups[i].positions
+        #     # potential_xyz = leaflets[lf_i].positions
 
-    #     #     pairs, dist = distances.capped_distance(hg_xyz,
-    #     #                                             potential_xyz,
-    #     #                                             self.cutoff,
-    #     #                                             box=self.selection.dimensions,
-    #     #                                             return_distances=True)
+        #     pairs, dist = distances.capped_distance(hg_xyz,
+        #                                             potential_xyz,
+        #                                             self.cutoff,
+        #                                             box=self.selection.dimensions,
+        #                                             return_distances=True)
 
-    #     #     if not len(pairs):
-    #     #         continue            
-    #     #     pairs = pairs[dist>0]
-    #     #     js = np.unique(pairs[:, 1])
-    #     #     neighbor_xyz = potential_xyz[js]
+        #     if not len(pairs):
+        #         continue            
+        #     pairs = pairs[dist>0]
+        #     js = np.unique(pairs[:, 1])
+        #     neighbor_xyz = potential_xyz[js]
 
-    #     #     # get protein / etc ones
-    #     #     pairs2 = distances.capped_distance(hg_xyz, other, self.cutoff_other,
-    #     #                                        box=self.selection.dimensions,
-    #     #                                        return_distances=False)
-    #     #     if len(pairs2):
-    #     #         other_xyz = other[np.unique(pairs2[:, 1])]
-    #     #     else:
-    #     #         other_xyz = None
-    #     #     res = self.residues[i]
-    #     #     try:
-    #     #         area = lipid_area(hg_xyz, neighbor_xyz,
-    #     #                         other_coordinates=other_xyz,
-    #     #                         box=self.selection.dimensions)
-    #     #     except:
-    #     #         print(i)
-    #     #         raise ValueError()
-    #     #     self.areas[self._frame_index][i] = area
-    #     #     self.areas_by_attr[lf_i][self.ids[i]].append(area)
+        #     # get protein / etc ones
+        #     pairs2 = distances.capped_distance(hg_xyz, other, self.cutoff_other,
+        #                                        box=self.selection.dimensions,
+        #                                        return_distances=False)
+        #     if len(pairs2):
+        #         other_xyz = other[np.unique(pairs2[:, 1])]
+        #     else:
+        #         other_xyz = None
+        #     res = self.residues[i]
+        #     try:
+        #         area = lipid_area(hg_xyz, neighbor_xyz,
+        #                         other_coordinates=other_xyz,
+        #                         box=self.selection.dimensions)
+        #     except:
+        #         print(i)
+        #         raise ValueError()
+        #     self.areas[self._frame_index][i] = area
+        #     self.areas_by_attr[lf_i][self.ids[i]].append(area)
 
-    def _conclude(self):
-        super()._conclude()
-        self.areas_by_attr = {}
-        self.mean_area_by_attr = {}
-        self.std_area_by_attr = {}
-        for id_ in self.ids:
-            values = np.concatenate(self.areas[:, self.ids == id_])
-            self.areas_by_attr[id_] = values
-            self.mean_area_by_attr[id_] = values.mean()
-            self.std_area_by_attr[id_] = values.std()
+    # def _conclude(self):
+    #     super()._conclude()
+    #     self.mean_area_by_attr = []
+    #     self.std_area_by_attr = []
+    #     for n in range(self.n_leaflets):
+    #         mean = {}
+    #         std = {}
+    #         for id_ in self.ids:
+    #             values = np.array(self.areas_by_attr[n][id_])
+    #             mean[id_] = values.mean()
+    #             std[id_] = values.std()
+    #         self.mean_area_by_attr.append(mean)
+    #         self.std_area_by_attr.append(std)
