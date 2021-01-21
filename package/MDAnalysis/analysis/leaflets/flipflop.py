@@ -60,7 +60,6 @@ class LipidFlipFlop(LeafletAnalysis):
         self.bilayer_section = np.zeros((self.n_frames, self.n_residues), dtype=int)
 
     def _single_frame(self):
-
         lfer = self.leafletfinder
         box = self.selection.dimensions
 
