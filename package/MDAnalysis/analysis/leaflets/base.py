@@ -45,6 +45,9 @@ class LeafletAnalysis(AnalysisBase):
         self.n_residues = len(self.residues)
         self.group_by_attr = group_by_attr
         self.ids = getattr(self.residues, self.group_by_attr)
+        self._rix2ix = {r.resindex:i for i, r in enumerate(self.residues)}
+        self._rix2id = {r.resindex:x for r, x in zip(self.residues, self.ids)}
+
         self.update_leaflet_step = update_leaflet_step
 
         if leafletfinder is None:
@@ -65,11 +68,26 @@ class LeafletAnalysis(AnalysisBase):
         self._a2lf = np.array([lf_res.index(x) for x in self.residues])
         self._lf2a = np.ones(self.leafletfinder.n_residues, dtype=int) * -1
         self._lf2a[self._a2lf] = np.arange(self.n_residues)
+        self._i2resix = {i:r.resindex
+                         for i, r in enumerate(self.leafletfinder.residues)
+                         if r in self.residues}
+        self._lf_res_i = set(self._i2resix.keys())
+        self._rix2ix = {r.resindex:i for i, r in enumerate(self.residues)}
+        self._rix2id = {r.resindex:x for r, x in zip(self.residues, self.ids)}
+
         
 
 
     def _update_leaflets(self):
         self.leafletfinder.run()
+        # leaflets of residues actually involved in analysis
+        self._relevant_lf_rix = [sorted(self._lf_res_i & set(c))
+                                 for c in self.leafletfinder.components]
+        self._relevant_resix = [[self._i2resix[r] for r in c]
+                                 for c in self._relevant_lf_rix]
+        self._relevant_rix = [[self._rix2ix[r] for r in c]
+                               for c in self._relevant_resix]
+
 
 
     def run(self, start=None, stop=None, step=None, verbose=None):

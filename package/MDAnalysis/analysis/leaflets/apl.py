@@ -242,14 +242,7 @@ class AreaPerLipid(LeafletAnalysis):
         self.rix2hg = {ag.residues[0].resindex: ag for ag in self.headgroups}
         self.n_per_res = np.array([len(x) for x in self.headgroups])
 
-        self.rix2ix = {r.resindex:i for i, r in enumerate(self.residues)}
-        self.rix2id = {r.resindex:x for r, x in zip(self.residues, self.ids)}
-
-        self.i2resix = {i:r.resindex
-                        for i, r in enumerate(self.leafletfinder.residues)
-                        if r in self.residues}
-        self._lf_res_i = set(self.i2resix.keys())
-        
+    
 
     def _prepare(self):
         super()._prepare()
