@@ -26,7 +26,8 @@ import numpy as np
 
 from ..base import AnalysisBase, ProgressBar
 from MDAnalysis.analysis.leaflets.leafletfinder import LeafletFinder
-
+from .utils import get_centers_by_residue
+from ..distances import capped_distance, distance_array
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class BaseLeafletAnalysis(AnalysisBase):
         self.ids = getattr(self.residues, self.group_by_attr)
         self._rix2ix = {r.resindex:i for i, r in enumerate(self.residues)}
         self._rix2id = {r.resindex:x for r, x in zip(self.residues, self.ids)}
-        self.n_leaflets = self.leafletfinder.n_leaflets
+        
         self.update_leaflet_step = update_leaflet_step
 
         if leafletfinder is None:
@@ -55,6 +56,7 @@ class BaseLeafletAnalysis(AnalysisBase):
                 leaflet_kwargs = dict(select=select, **leaflet_kwargs)
             leafletfinder = LeafletFinder(universe, **leaflet_kwargs)
         self.leafletfinder = leafletfinder
+        self.n_leaflets = self.leafletfinder.n_leaflets
 
 
     def _update_leaflets(self):
@@ -102,24 +104,24 @@ class LeafletAnalysis(BaseLeafletAnalysis):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        try:
-            assert self.residues.issubset(self.leafletfinder.residues)
-        except AssertionError:
-            raise ValueError("Residues selected for LeafletFinder "
-                             "must include all residues selected for "
-                             "leaflet-based analysis")
-        
-        
         lf_res = list(self.leafletfinder.residues)
-        self._a2lf = np.array([lf_res.index(x) for x in self.residues])
+        self.in_lf = [i for i, x in enumerate(self.residues) if x in lf_res]
+        self.out_lf = [i for i in range(self.n_residues) if i not in self.in_lf]
+        if len(self.out_lf):
+            self.out_hg = sum([self.headgroups[i] for i in self.out_lf])
+        else:
+            self.out_hg = self.universe.atoms[[]]
+
+        self._a2lf = np.array([lf_res.index(self.residues[x]) for x in self.in_lf])
         self._lf2a = np.ones(self.leafletfinder.n_residues, dtype=int) * -1
-        self._lf2a[self._a2lf] = np.arange(self.n_residues)
+        self._lf2a[self._a2lf] = self.in_lf
         self._i2resix = {i:r.resindex
                          for i, r in enumerate(self.leafletfinder.residues)
                          if r in self.residues}
         self._lf_res_i = set(self._i2resix.keys())
         self._rix2ix = {r.resindex:i for i, r in enumerate(self.residues)}
         self._rix2id = {r.resindex:x for r, x in zip(self.residues, self.ids)}
+        self.cutoff = self.leafletfinder.cutoff
 
 
     def _update_leaflets(self):
@@ -131,3 +133,37 @@ class LeafletAnalysis(BaseLeafletAnalysis):
                                  for c in self._relevant_lf_rix]
         self._relevant_rix = [[self._rix2ix[r] for r in c]
                                for c in self._relevant_resix]
+        
+        if len(self.out_hg):
+            box = self._ts.dimensions
+            pos = get_centers_by_residue(self.out_hg, box=box)
+            for i, xyz in zip(self.out_lf, pos):
+
+                coords = self.leafletfinder.coordinates
+                pairs, dists = capped_distance(pos, xyz,
+                                            max_cutoff=self.cutoff,
+                                            box=box,
+                                            return_distances=True)
+                comps = self.leafletfinder.components
+                masks = [np.in1d(pairs[:, 0], c) for c in comps]
+                comp_dists = np.array([dists[m].mean() for m in masks])
+                nan_mask = np.isnan(comp_dists)
+                if  np.any(~nan_mask):
+                    comp_dists[nan_mask] = np.inf
+                else:
+                    comp_dists = [distance_array(x, xyz).mean() 
+                                for x in self.leafletfinder.positions]
+                self._relevant_rix[np.argmin(comp_dists)].append(i)
+
+            self._relevant_rix = [np.array(sorted(x)) for x in self._relevant_rix]
+
+
+    def get_leaflet_coordinates(self, res_indices):
+        box = self.universe.dimensions
+        atoms = sum([self.headgroups[i] for i in res_indices])
+        return get_centers_by_residue(atoms, box=box)
+
+                
+        
+        
+        

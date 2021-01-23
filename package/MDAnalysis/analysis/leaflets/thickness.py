@@ -25,6 +25,7 @@ import numpy as np
 
 from .base import LeafletAnalysis
 from ...lib.util import fixedwidth_bins
+from . import utils
 
 
 class Thickness(LeafletAnalysis):
@@ -78,10 +79,8 @@ class Thickness(LeafletAnalysis):
         n_upper = np.zeros((self.ny, self.nx))
         n_lower = np.zeros((self.ny, self.nx))
 
-        upper_rix = self._relevant_lf_rix[0]
-        upper = self.leafletfinder.coordinates[upper_rix]
-        lower_rix = self._relevant_lf_rix[1]
-        lower = self.leafletfinder.coordinates[lower_rix]
+        upper = self.get_leaflet_coordinates(self._relevant_rix[0])
+        lower = self.get_leaflet_coordinates(self._relevant_rix[1])
 
         xu = np.searchsorted(self.xbins, upper[:, 0]) - 1
         yu = np.searchsorted(self.ybins, upper[:, 1]) - 1

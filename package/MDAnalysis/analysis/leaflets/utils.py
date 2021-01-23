@@ -53,6 +53,7 @@ def get_orientations(residues, headgroups, box=None, headgroup_centers=None,
     other = residues.atoms - headgroups
     other_centers = get_centers_by_residue(other, centers=headgroup_centers,
                                            box=box)
+
     orientations = other_centers - headgroup_centers
     if normalize:
         norms = np.linalg.norm(orientations, axis=1)
@@ -132,6 +133,8 @@ def get_distances_with_projection(coordinates, orientations, cutoff, box=None,
         neigh_ -= i_coord
         
         vec = orientations[[i]]
+        if np.any(np.isnan(vec)):
+            continue
         # if average_orientations and average_neighbors:
         #     # within_threshold = d <= max_dist
         #     # acute = angles[i][js] > 0

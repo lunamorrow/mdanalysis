@@ -24,9 +24,10 @@
 import numpy as np
 
 from .base import LeafletAnalysis
-from .. import distances
-from ...lib.c_distances import unwrap_around
+from ..distances import capped_distance, distance_array
+from ...lib.c_distances import unwrap_around, mean_unwrap_around
 from ...lib.mdamath import norm
+from .utils import get_centers_by_residue
 
 class LipidFlipFlop(LeafletAnalysis):
     """Quantify lipid flip-flops between leaflets.
@@ -56,80 +57,99 @@ class LipidFlipFlop(LeafletAnalysis):
         self.other_i = set(other_i)
     
     def _prepare(self):
-        self.residue_leaflet_raw = np.zeros((self.n_frames, self.n_residues), dtype=int)
-        self.bilayer_section = np.zeros((self.n_frames, self.n_residues), dtype=int)
+        self.residue_leaflet = np.ones((self.n_frames, self.n_residues), dtype=int)
+        self.residue_leaflet *= -1
 
     def _single_frame(self):
-        lfer = self.leafletfinder
-        box = self.selection.dimensions
+        box = self.universe.dimensions
+        coords = self.leafletfinder.coordinates.copy()
+        coords[:, :2] = 0
+        upper_comp, lower_comp = self.leafletfinder.components[:2]
+        # upper_z = coords[upper_comp]
+        # lower_z = coords[lower_comp]
+        # thickness = upper_z.mean() - lower_z.mean()
+        upper_comp = set(list(upper_comp))
+        lower_comp = set(list(lower_comp))
 
-        components = [set(x) for x in lfer.components]
+        upper_i = 0
+        lower_i = 1
+        inter_i = -1
 
-        for i in range(self.n_residues):
-            j = self._a2lf[i]
-            lf_i = lfer.i2comp[j]
-            self.residue_leaflet_raw[self._frame_index, i] = lf_i
+        row = self.residue_leaflet[self._frame_index]
 
-            # determine which is upper or lower for mid-point calculation
-            if lf_i % 2:
-                top_i, bot_i = lf_i - 1, lf_i
-            else:
-                top_i, bot_i = lf_i, lf_i + 1
+        res_positions = get_centers_by_residue(self.selection)
 
-            # i_xyz = lfer.coordinates[j]
-            i_xyz = self.headgroups[i].positions
-            i_xyz = unwrap_around(i_xyz, i_xyz[0], box=box)
+        pairs = capped_distance(res_positions,
+                                self.leafletfinder.coordinates,
+                                box=box,
+                                max_cutoff=self.cutoff,
+                                return_distances=False)
+        all_pairs = np.sort(pairs, axis=0)
+        splix = np.where(np.ediff1d(pairs[:, 0]))[0] + 1
+        plist = np.split(pairs, splix)
 
-            top = np.array(list(components[top_i] & self.other_i))
-            bot = np.array(list(components[bot_i] & self.other_i))
+        res_positions[:, :2] = 0
+
+        for pairs_ in plist:
+            rix = set(pairs_[:, 1])
+            i = pairs[0, 0]
+            # rix = set(all_pairs[all_pairs[:, 0] == i][:, 1])
+
+        # for i, r in enumerate(self.headgroups):
+        #     res = r.positions.copy()
+
+        #     pairs = capped_distance(self.leafletfinder.coordinates,
+        #                             res, box=box,
+        #                             max_cutoff=self.cutoff,
+        #                             return_distances=False)
+
+            # rix = set(list(pairs[:, 0]))
+            upper_idx = sorted(rix & upper_comp)
+            lower_idx = sorted(rix & lower_comp)
+            upper = coords[upper_idx]
+            lower = coords[lower_idx]
+            res = res_positions[i]
+
+            # upper = dists[np.in1d(rix, upper_comp)]
+            # lower = dists[np.in1d(rix, lower_comp)]
             
-            top_xyz = lfer.coordinates[top]
-            bot_xyz = lfer.coordinates[bot]
 
-            i_xyz_ = i_xyz.copy()
-            i_xyz_[0][2] = 0
-            top_xyz_ = top_xyz.copy()
-            bot_xyz_ = bot_xyz.copy()
+            if not len(pairs):
+                # not near any leaflet
+                row[i] = inter_i
+                continue
 
-            top_xyz_[:, 2] = 0
-            bot_xyz_[:, 2] = 0
+            if not len(lower) and len(upper):
+                row[i] = upper_i
+                continue
 
-            # there's probably a better way to do this
-            top_pairs, top_dists = distances.capped_distance(i_xyz_, top_xyz_, self.cutoff,
-                                                            return_distances=True)
-            bot_pairs, bot_dists = distances.capped_distance(i_xyz_, bot_xyz_, self.cutoff,
-                                                             return_distances=True)
+            if not len(upper) and len(lower):
+                row[i] = lower_i
+                continue
 
-            top_pairs = top_pairs[np.argsort(top_dists)][:5]
-            bot_pairs = bot_pairs[np.argsort(bot_dists)][:5]
+            upper = mean_unwrap_around(upper, res, box)
+            lower = mean_unwrap_around(lower, res, box)
 
-            top_uw = unwrap_around(top_xyz[top_pairs[:, 1]], i_xyz, box=box)
-            top_point = top_uw.mean(axis=0)
-            bot_uw = unwrap_around(bot_xyz[bot_pairs[:, 1]], i_xyz, box=box)
-            bot_point = bot_uw.mean(axis=0)
+            # thickness = distance_array(upper, lower, box=box).mean()
+            thickness = upper[2] - lower[2]
+            dist_threshold = thickness/2 - self.buffer_zone
 
-            top_point[[0, 1]] = 0
-            bot_point[[0, 1]] = 0
-            i_xyz[0][[0, 1]] = 0
+            # upper_dist = distance_array(upper, res, box=box).mean()
+            # lower_dist = distance_array(lower, res, box=box).mean()
 
-            vec = top_point - bot_point
-            dist = norm(vec) / 2
-            mid = (dist * vec) + bot_point
-            buffer = dist - self.buffer_zone
-            i_xyz = np.array([i_xyz[0], i_xyz[0], i_xyz[0]])
-            points = np.array([mid, top_point, bot_point])
+            upper_dist = upper[2] - res[2]
+            lower_dist = res[2] - lower[2]
 
-
-            dist_to_z, *tbs = distances.calc_bonds(i_xyz, points, box=box)
-            if dist_to_z < buffer:
-                lf_i = -1
+            
+            if upper_dist <= dist_threshold:
+                row[i] = upper_i
+            elif lower_dist <= dist_threshold:
+                row[i] = lower_i
             else:
-                lf_i = [top_i, bot_i][np.argmin(tbs)]
-            self.bilayer_section[self._frame_index, i] = lf_i
+                row[i] = inter_i
             
 
     def _conclude(self):
-        self.residue_leaflet = np.zeros_like(self.residue_leaflet_raw)
         self.flips = np.zeros(self.n_residues)
         self.flops = np.zeros(self.n_residues)
         self.flip_sections = np.zeros(self.n_residues)
@@ -139,35 +159,21 @@ class LipidFlipFlop(LeafletAnalysis):
             return
 
         for i in range(self.n_residues):
-            trans = self.residue_leaflet_raw[:, i]
-            self.residue_leaflet[:, i] = trans
+            trans = self.residue_leaflet[:, i]
+            trans = trans[trans != -1]
             diff = trans[1:] - trans[:-1]
+
             self.flips[i] = np.sum(diff > 0)  # 0: upper, 1: lower
             self.flops[i] = np.sum(diff < 0)
-
-            trans2 = self.bilayer_section[:, i]
-            trans2 = trans2[trans2 != -1]
-            if len(trans2) < 2: 
-                continue
-            diff2 = trans2[1:] - trans2[:-1]
-            self.flip_sections[i] = np.sum(diff2 > 0)
-            self.flop_sections[i] = np.sum(diff2 < 0)
         
         self.translocations = self.flips + self.flops
-        self.trans_sections = self.flip_sections + self.flop_sections
 
         self.flips_by_attr = {}
         self.flops_by_attr = {}
         self.translocations_by_attr = {}
 
-        self.flip_sections_by_attr = {}
-        self.flop_sections_by_attr = {}
-        self.trans_sections_by_attr = {}
         for each in np.unique(self.ids):
             mask = self.ids == each
             self.flips_by_attr[each] = int(sum(self.flips[mask]))
             self.flops_by_attr[each] = int(sum(self.flops[mask]))
             self.translocations_by_attr[each] = int(sum(self.translocations[mask]))
-            self.flip_sections_by_attr[each] = int(sum(self.flip_sections[mask]))
-            self.flop_sections_by_attr[each] = int(sum(self.flop_sections[mask]))
-            self.trans_sections_by_attr[each] = int(sum(self.trans_sections[mask]))

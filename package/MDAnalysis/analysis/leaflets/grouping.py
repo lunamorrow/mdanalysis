@@ -131,8 +131,8 @@ def group_by_spectralclustering(residues, headgroups, n_leaflets=2, delta=20,
                                     headgroup_centers=coordinates,
                                     normalize=True)
     dist_mat = get_distances_with_projection(coordinates, orientations,
-                                             cutoff, box=box,
-                                             angle_factor=angle_factor)
+                                            cutoff, box=box,
+                                            angle_factor=angle_factor)
     
     if delta is None:
         delta = np.max(dist_mat[dist_mat < cutoff*2]) / 3
@@ -142,7 +142,9 @@ def group_by_spectralclustering(residues, headgroups, n_leaflets=2, delta=20,
     cos = np.clip(angles, -angle_threshold, angle_threshold)
     cos += angle_threshold
     cos /= (2*angle_threshold)
-    ker = gau * cos
+    ker = gau
+    mask = ~np.isnan(cos)
+    gau[mask] *= cos[mask]
 
     clusters = Clusters(skc.SpectralClustering, n_clusters=n_leaflets,
                         affinity="precomputed")
