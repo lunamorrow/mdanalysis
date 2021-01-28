@@ -21,6 +21,7 @@
 # J. Comput. Chem. 32 (2011), 2319--2327, doi:10.1002/jcc.21787
 #
 import logging
+import warnings
 
 import numpy as np
 
@@ -150,7 +151,10 @@ class LeafletAnalysis(BaseLeafletAnalysis):
                                             return_distances=True)
                 comps = self.leafletfinder.components
                 masks = [np.in1d(pairs[:, 0], c) for c in comps]
-                comp_dists = np.array([dists[m].mean() for m in masks])
+                with warnings.catch_warnings():
+                    # mean of empty slice raises warnings
+                    warnings.simplefilter("ignore", category=RuntimeWarning)
+                    comp_dists = np.array([dists[m].mean() for m in masks])
                 nan_mask = np.isnan(comp_dists)
                 if  np.any(~nan_mask):
                     comp_dists[nan_mask] = np.inf
