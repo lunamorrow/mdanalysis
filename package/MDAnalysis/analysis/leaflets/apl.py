@@ -225,9 +225,13 @@ class AreaPerLipid(LeafletAnalysis):
         super().__init__(universe, *args, **kwargs)
         self.max_neighbors = max_neighbors
         if select_other is None:
-            self.other = (self.universe.residues - self.residues).atoms
+            self.other = self.universe.atoms[[]]
         else:
             self.other = universe.select_atoms(select_other) - self.residues.atoms
+        if len(self.other):
+            self._get_other_coordinates = self._get_other
+        else:
+            self._get_other_coordinates = lambda x, y, z: None
         self.cutoff = cutoff
         if cutoff_other is None:
             cutoff_other = cutoff
@@ -250,6 +254,18 @@ class AreaPerLipid(LeafletAnalysis):
             for each in self.unique_ids:
                 dct[each] = []
             self.areas_by_attr.append(dct)
+
+    def _get_other(self, hg_xyz, other, box):
+        pairs2 = capped_distance(hg_xyz, other, self.cutoff_other,
+                                box=box,
+                                return_distances=False)
+        if len(pairs2):
+            other_xyz = other[np.unique(pairs2[:, 1])]
+        else:
+            other_xyz = None
+        
+        return other_xyz
+
     
     def _single_frame(self):
         other = self.other.positions
@@ -284,15 +300,7 @@ class AreaPerLipid(LeafletAnalysis):
                     continue
                 neighbor_xyz = coords[js[:self.max_neighbors]]
 
-                rid = self.ids[resi]
-                pairs2 = capped_distance(hg_xyz, other, self.cutoff_other,
-                                         box=box,
-                                         return_distances=False)
-
-                if len(pairs2):
-                    other_xyz = other[np.unique(pairs2[:, 1])]
-                else:
-                    other_xyz = None
+                other_xyz = self._get_other_coordinates(hg_xyz, other, box)
 
                 try:
                     area = lipid_area(hg_xyz, neighbor_xyz,
@@ -302,6 +310,7 @@ class AreaPerLipid(LeafletAnalysis):
                     print(self._frame_index, i, resi, self.ids[resi])
                     area = np.nan
 
+                rid = self.ids[resi]
                 self.areas[self._frame_index][resi] = area
                 self.areas_by_leaflet[self._frame_index][leaflet_idx][resi] = area
                 self.areas_by_attr[leaflet_idx][rid].append(area)
