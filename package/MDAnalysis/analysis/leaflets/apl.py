@@ -242,6 +242,8 @@ class AreaPerLipid(LeafletAnalysis):
     def _prepare(self):
         super()._prepare()
         self.areas = np.zeros((self.n_frames, self.n_residues))
+        self.areas_by_leaflet = np.zeros((self.n_frames, self.n_leaflets, self.n_residues))
+        self.areas_by_leaflet[:] = np.nan
         self.areas_by_attr = []
         for i in range(self.n_leaflets):
             dct = {}
@@ -292,9 +294,14 @@ class AreaPerLipid(LeafletAnalysis):
                 else:
                     other_xyz = None
 
-                area = lipid_area(hg_xyz, neighbor_xyz,
-                                  other_coordinates=other_xyz,
-                                  box=box)
-                if area > 0:
-                    self.areas[self._frame_index][resi] = area
-                    self.areas_by_attr[leaflet_idx][rid].append(area)
+                try:
+                    area = lipid_area(hg_xyz, neighbor_xyz,
+                                    other_coordinates=other_xyz,
+                                    box=box)
+                except ValueError:
+                    print(self._frame_index, i, resi, self.ids[resi])
+                    area = np.nan
+
+                self.areas[self._frame_index][resi] = area
+                self.areas_by_leaflet[self._frame_index][leaflet_idx][resi] = area
+                self.areas_by_attr[leaflet_idx][rid].append(area)

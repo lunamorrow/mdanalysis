@@ -24,7 +24,7 @@
 import numpy as np
 
 from .base import LeafletAnalysis
-from ..distances import capped_distance, distance_array
+from ..distances import capped_distance, distance_array, calc_bonds
 from ...lib.c_distances import unwrap_around, mean_unwrap_around
 from ...lib.mdamath import norm
 from .utils import get_centers_by_residue
@@ -112,12 +112,6 @@ class LipidFlipFlop(LeafletAnalysis):
 
             # upper = dists[np.in1d(rix, upper_comp)]
             # lower = dists[np.in1d(rix, lower_comp)]
-            
-
-            if not len(pairs):
-                # not near any leaflet
-                row[i] = inter_i
-                continue
 
             if not len(lower) and len(upper):
                 row[i] = upper_i
@@ -127,18 +121,20 @@ class LipidFlipFlop(LeafletAnalysis):
                 row[i] = lower_i
                 continue
 
-            upper = mean_unwrap_around(upper, res, box)
-            lower = mean_unwrap_around(lower, res, box)
+            upper = mean_unwrap_around(upper, upper[0], box)
+            lower = mean_unwrap_around(lower, lower[0], box)
 
             # thickness = distance_array(upper, lower, box=box).mean()
-            thickness = upper[2] - lower[2]
-            dist_threshold = thickness/2 - self.buffer_zone
+            thickness = calc_bonds(upper, lower, box=box)
+            
+            dist_threshold = max(thickness/2 - self.buffer_zone, 1)
+            # print("thickness", dist_threshold)
 
             # upper_dist = distance_array(upper, res, box=box).mean()
             # lower_dist = distance_array(lower, res, box=box).mean()
 
-            upper_dist = upper[2] - res[2]
-            lower_dist = res[2] - lower[2]
+            upper_dist = calc_bonds(upper, res)
+            lower_dist = calc_bonds(lower, res)
 
             
             if upper_dist <= dist_threshold:

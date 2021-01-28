@@ -24,7 +24,8 @@
 import numpy as np
 
 from .base import BaseLeafletAnalysis
-from ..distances import capped_distance
+from ..distances import capped_distance, calc_bonds, self_distance_array
+from ...lib._cutil import remove_repeated_int
 
 class MembraneTransition(BaseLeafletAnalysis):
 
@@ -32,70 +33,97 @@ class MembraneTransition(BaseLeafletAnalysis):
         super().__init__(universe, *args, **kwargs)
 
     def _prepare(self):
-        ...
+        self.locations = np.ones((self.n_frames, self.n_residues))
+        self.locations *= -10
 
-        self.locations = np.zeros((self.n_frames, self.n_residues))
-        self.transitions = np.zeros(self.n_residues)
 
     def _single_frame(self):
+        upper_i = 0
+        membrane_i = 1
+        lower_i = 2
+        inter_i = -10
         
+        box = self.universe.dimensions
+
         coords = self.leafletfinder.coordinates.copy()
         coords[:, :2] = 0
         upper_comp, lower_comp = self.leafletfinder.components[:2]
-        upper_z = coords[upper_comp]
-        lower_z = coords[lower_comp]
-        thickness = upper_z.mean() - lower_z.mean()
-
-        box = self._trajectory.box
+        upper_comp = set(list(upper_comp))
+        lower_comp = set(list(lower_comp))
+        
         if box is not None:
             zone_length = box[2] / 3
         else:
+            upper_z = coords[upper_comp]
+            lower_z = coords[lower_comp]
+            thickness = calc_bonds(upper_z.mean(axis=0),
+                                   lower_z.mean(axis=0),
+                                   box=box)
             zone_length = thickness * 2
-        
+
         row = self.locations[self._frame_index]
-        for i, r in enumerate(self.headgroups):
-            res = r.positions.copy()
-            res[:, :2] = 0
-            pairs, dists = capped_distance(coords, res,
-                                           max_cutoff=zone_length,
-                                           box=box,
-                                           return_distances=True)
-            if not len(pairs):
-                # not near any leaflet
-                row[i] = -10
-                continue
-            
-            rix = pairs[:, 0]
-            upper = dists[np.in1d(rix, upper_comp)]
-            lower = dists[np.in1d(rix, lower_comp)]
+        res_positions = get_centers_by_residue(self.selection)
+
+        pairs = capped_distance(res_positions,
+                                self.leafletfinder.coordinates,
+                                box=box, max_cutoff=zone_length,
+                                return_distances=False)
+
+        all_pairs = np.sort(pairs, axis=0)
+        splix = np.where(np.ediff1d(pairs[:, 0]))[0] + 1
+        plist = np.split(pairs, splix)
+
+        res_positions[:, :2] = 0
+
+        for pairs_ in plist:
+            rix = set(pairs_[:, 1])
+            i = pairs[0, 0]
+
+            upper_idx = sorted(rix & upper_comp)
+            lower_idx = sorted(rix & lower_comp)
+            upper = coords[upper_idx]
+            lower = coords[lower_idx]
+            res = res_positions[i]
 
             if not len(lower) and len(upper):
-                row[i] = 0
+                row[i] = upper_i
                 continue
 
             if not len(upper) and len(lower):
-                row[i] = 2
+                row[i] = lower_i
                 continue
 
-            upper_mean = upper.mean()
-            lower_mean = lower.mean()
+            upper = mean_unwrap_around(upper, upper[0], box)
+            lower = mean_unwrap_around(lower, lower[0], box)
+            ref = np.array([upper, lower, res])
 
-            if upper_mean <= thickness and lower_mean <= thickness:
-                row[i] = 1
-            elif upper_mean < lower_mean:
-                row[i] = 0
+            thickness, udist, ldist = self_distance_array(ref, box=box)
+
+            if (udist <= thickness) and (ldist <= thickness):
+                row[i] = membrane_i
+            elif udist <= ldist:
+                row[i] = upper_i
             else:
-                row[i] = 2
+                row[i] = lower_i
+        
 
     def _conclude(self):
-        ...
-        # TODO: finish
-        # differences = self.locations[:-1] - self.locations[1:]
-        # abs_diff = np.abs(differences)
-        # np.where(abs_dif == 2)[0]
-        # loc_differences = differences[:-1] - differences[1:]
+        # look for 0, 1, 2 or 2, 1, 0
+        # NOT -1
 
+        self.flips = np.zeros((self.n_residues))
+        self.flops = np.zeros((self.n_residues))
 
+        if not self.n_frames:
+            return
+
+        for i, col in enumerate(self.locations.T):
+            unique = remove_repeated_int(col[col != 1])
+            diff = unique[:-1] - unique[1:]
+            self.flips[i] = (diff == 2).sum()
+            self.flops[i] = (diff == -2).sum()
+
+        self.transitions = self.flips + self.flops
     
 
 

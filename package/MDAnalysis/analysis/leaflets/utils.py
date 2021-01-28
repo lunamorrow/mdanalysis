@@ -30,18 +30,10 @@ from ...lib.c_distances import unwrap_around, mean_unwrap_around, calc_cosine_si
 def get_centers_by_residue(selection, centers=None, box=None):
     if box is None:
         return selection.center(None, compound='residues', pbc=False)
-    # res = selection.split('residue')
-    # sel = [x.positions for x in res]
-    # print(np.ediff1d(selection.resindices))
     splix = np.where(np.ediff1d(selection.resindices))[0]+1
     sel = np.split(selection.positions, splix)
     if centers is None:
         centers = [x[0] for x in sel]
-
-    
-    # uw = [unwrap_around(x, c, box) for x, c in zip(sel, centers)]
-    # unwrapped = np.array([x.mean(axis=0) for x in uw])
-    # print(unwrapped)
     unwrapped = np.array([mean_unwrap_around(x, c, box) for x, c in zip(sel, centers)])
     return unwrapped
 

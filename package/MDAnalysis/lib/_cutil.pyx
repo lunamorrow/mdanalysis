@@ -36,7 +36,8 @@ from cython.operator cimport dereference as deref
 
 
 __all__ = ['unique_int_1d', 'make_whole', 'find_fragments',
-           '_sarrus_det_single', '_sarrus_det_multiple']
+           '_sarrus_det_single', '_sarrus_det_multiple',
+           'remove_repeated_int']
 
 cdef extern from "calc_distances.h":
     ctypedef float coordinate[3]
@@ -45,6 +46,41 @@ cdef extern from "calc_distances.h":
 
 ctypedef cset[int] intset
 ctypedef cmap[int, intset] intmap
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def remove_repeated_int(np.intp_t[:] values):
+    """Remove repeated values of a 1D array of integers.
+
+    Parameters
+    ----------
+    values: numpy.ndarray
+        1D array of dtype ``numpy.int64`` in which to find the unique values.
+
+    Returns
+    -------
+    numpy.ndarray
+        A deduplicated copy of `values`.
+
+
+    .. versionadded:: 0.19.0
+    """
+    cdef int i = 0
+    cdef int j = 0
+    cdef int n_values = values.shape[0]
+    cdef np.intp_t[:] result = np.empty(n_values, dtype=np.intp)
+
+    if n_values == 0:
+        return np.array(result)
+
+    result[0] = values[0]
+    for i in range(1, n_values):
+        if values[i] != result[j]:
+            j += 1
+            result[j] = values[i]
+    result = result[:j + 1]
+
+    return np.array(result)
 
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function

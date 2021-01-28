@@ -206,7 +206,7 @@ class LeafletFinder(object):
                 self.i2comp[j] = i
 
         
-    def __init__(self, universe, select='all', cutoff=None, pbc=True,
+    def __init__(self, universe, select='all', cutoff=40, pbc=True,
                  method="spectralclustering", n_leaflets=2, **kwargs):
         self.universe = universe.universe
         self.select = select

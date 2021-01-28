@@ -114,7 +114,11 @@ class LeafletAnalysis(BaseLeafletAnalysis):
 
         self._a2lf = np.array([lf_res.index(self.residues[x]) for x in self.in_lf])
         self._lf2a = np.ones(self.leafletfinder.n_residues, dtype=int) * -1
-        self._lf2a[self._a2lf] = self.in_lf
+
+        try:
+            self._lf2a[self._a2lf] = self.in_lf
+        except IndexError:
+            pass
         self._i2resix = {i:r.resindex
                          for i, r in enumerate(self.leafletfinder.residues)
                          if r in self.residues}

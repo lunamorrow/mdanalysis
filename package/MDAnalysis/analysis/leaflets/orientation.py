@@ -24,12 +24,14 @@
 import numpy as np
 
 from ..base import AnalysisBase
+from .base import LeafletAnalysis
 from .utils import get_centers_by_residue, get_orientations
 
-class LipidOrientation(AnalysisBase):
+class Orientation(AnalysisBase):
 
     def __init__(self, universe, select="name ROH"):
         super().__init__(universe.universe.trajectory)
+        self.universe = universe.universe
         self.selection = universe.select_atoms(select)
         self.headgroups = self.selection.split("residue")
         self.residues = self.selection.residues
@@ -39,7 +41,7 @@ class LipidOrientation(AnalysisBase):
         self.orientations = np.zeros((self.n_frames, self.n_residues))
     
     def _single_frame(self):
-        box = self._trajectory.box
+        box = self.universe.dimensions
         coordinates = get_centers_by_residue(self.selection,
                                              box=box)
         orientations = get_orientations(self.residues,
@@ -49,3 +51,32 @@ class LipidOrientation(AnalysisBase):
                                         normalize=True)
         
         self.orientations[self._frame_index] = np.arccos(orientations[:, 2])
+
+    def _conclude(self):
+        self.degrees = np.rad2deg(self.orientations)
+    
+    
+class LipidOrientation(LeafletAnalysis):
+
+    def __init__(self, universe, *args, **kwargs):
+        super().__init__(universe, *args, **kwargs)
+
+    def _prepare(self):
+        shape = (self.n_frames, self.n_leaflets, self.n_residues)
+        self.orientations = np.zeros(shape)
+        self.orientations[:] = np.nan
+
+    def _single_frame(self):
+        box = self.universe.dimensions
+        frame = self.orientations[self._frame_index]
+        for leaflet_row, res_indices in zip(frame, self._relevant_rix):
+            coords = self.get_leaflet_coordinates(res_indices)
+            orientations = get_orientations(self.residues,
+                                            self.selection,
+                                            box=box,
+                                            headgroup_centers=coords,
+                                            normalize=True)
+            leaflet_row[res_indices] = np.arccos(orientations[:, 2])
+    
+    def _conclude(self):
+        self.degrees = np.rad2deg(self.orientations)
