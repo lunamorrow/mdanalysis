@@ -307,7 +307,7 @@ class AreaPerLipid(LeafletAnalysis):
                                     other_coordinates=other_xyz,
                                     box=box)
                 except ValueError:
-                    print(self._frame_index, i, resi, self.ids[resi])
+                    # print(self._frame_index, i, resi, self.ids[resi])
                     area = np.nan
 
                 rid = self.ids[resi]

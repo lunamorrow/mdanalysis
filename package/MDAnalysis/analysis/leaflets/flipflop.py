@@ -48,10 +48,10 @@ class LipidFlipFlop(LeafletAnalysis):
     """
 
     def __init__(self, universe, *args, select="resname CHOL",
-                 cutoff=50, buffer_zone=8, **kwargs):
+                 cutoff=50, leaflet_width=11, **kwargs):
         super().__init__(universe, *args, select=select, **kwargs)
         self.cutoff = cutoff
-        self.buffer_zone = buffer_zone
+        self.leaflet_width = leaflet_width
         other_i = [i for i, x in enumerate(self.leafletfinder.residues)
                    if x not in self.residues]
         self.other_i = set(other_i)
@@ -92,7 +92,7 @@ class LipidFlipFlop(LeafletAnalysis):
 
         for pairs_ in plist:
             rix = set(pairs_[:, 1])
-            i = pairs[0, 0]
+            i = pairs_[0, 0]
             # rix = set(all_pairs[all_pairs[:, 0] == i][:, 1])
 
         # for i, r in enumerate(self.headgroups):
@@ -125,9 +125,9 @@ class LipidFlipFlop(LeafletAnalysis):
             lower = mean_unwrap_around(lower, lower[0], box)
 
             # thickness = distance_array(upper, lower, box=box).mean()
-            thickness = calc_bonds(upper, lower, box=box)
+            # thickness = calc_bonds(upper, lower, box=box)
             
-            dist_threshold = max(thickness/2 - self.buffer_zone, 1)
+            
             # print("thickness", dist_threshold)
 
             # upper_dist = distance_array(upper, res, box=box).mean()
@@ -137,9 +137,9 @@ class LipidFlipFlop(LeafletAnalysis):
             lower_dist = calc_bonds(lower, res)
 
             
-            if upper_dist <= dist_threshold:
+            if upper_dist <= self.leaflet_width:
                 row[i] = upper_i
-            elif lower_dist <= dist_threshold:
+            elif lower_dist <= self.leaflet_width:
                 row[i] = lower_i
             else:
                 row[i] = inter_i
