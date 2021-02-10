@@ -48,10 +48,11 @@ class LipidFlipFlop(LeafletAnalysis):
     """
 
     def __init__(self, universe, *args, select="resname CHOL",
-                 cutoff=50, leaflet_width=11, **kwargs):
+                 cutoff=50, buffer_zone=8, leaflet_width=8, **kwargs):
         super().__init__(universe, *args, select=select, **kwargs)
         self.cutoff = cutoff
         self.leaflet_width = leaflet_width
+        self.buffer_zone = buffer_zone
         other_i = [i for i, x in enumerate(self.leafletfinder.residues)
                    if x not in self.residues]
         self.other_i = set(other_i)
@@ -126,6 +127,7 @@ class LipidFlipFlop(LeafletAnalysis):
 
             # thickness = distance_array(upper, lower, box=box).mean()
             # thickness = calc_bonds(upper, lower, box=box)
+            # dist_threshold = max(thickness/2 - self.buffer_zone, 1)
             
             
             # print("thickness", dist_threshold)

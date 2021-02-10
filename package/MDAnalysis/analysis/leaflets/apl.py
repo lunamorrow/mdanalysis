@@ -166,6 +166,10 @@ def lipid_area(headgroup_coordinate,
                                                 headgroup_coordinate[0],
                                                 box)
         headgroup_coordinate = headgroup_coordinates.mean(axis=0)
+
+    if len(neighbor_coordinates) < 2:
+        return np.nan
+
     if box is not None:
         neighbor_coordinates = unwrap_around(neighbor_coordinates.copy(),
                                              headgroup_coordinate,
