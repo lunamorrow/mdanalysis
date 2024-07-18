@@ -333,6 +333,7 @@ def extensions(config):
     else:
         print('Will not attempt to use Cython.')
 
+    use_cython = True
     source_suffix = '.pyx' if use_cython else '.c'
     cpp_source_suffix = '.pyx' if use_cython else '.cpp'
 
