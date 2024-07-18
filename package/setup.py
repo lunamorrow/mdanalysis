@@ -323,6 +323,7 @@ def extensions(config):
     use_cython = False
     if use_cython:
         print('Will attempt to use Cython.')
+        print(use_cython)
         if not cython_found:
             print("Couldn't find a Cython installation. "
                   "Not recompiling cython extensions.")
