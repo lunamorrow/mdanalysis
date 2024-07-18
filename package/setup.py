@@ -220,7 +220,8 @@ def hasfunction(cc, funcname, include=None, extra_postargs=None):
             objects = cc.compile([fname], output_dir=tmpdir,
                                  extra_postargs=extra_postargs)
             cc.link_executable(objects, os.path.join(tmpdir, "a.out"))
-        except Exception:
+        except Exception as e:
+            print(e)
             return False
         return True
     finally:
