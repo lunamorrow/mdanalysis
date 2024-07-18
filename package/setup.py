@@ -219,6 +219,11 @@ def hasfunction(cc, funcname, include=None, extra_postargs=None):
             os.dup2(devnull.fileno(), sys.stderr.fileno())
             print("made it to 6\n")
             print(cc)
+
+            from sysconfig import get_config_vars
+            get_config_vars('CC', 'CXX', 'LDSHARED')
+            cc = 'gcc -pthread -B /home/lunamorrow/miniconda3/compiler_compat'
+
             objects = cc.compile([fname], output_dir=tmpdir,
                                  extra_postargs=extra_postargs)
             print("made it to 7\n")
