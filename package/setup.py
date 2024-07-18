@@ -320,6 +320,8 @@ def extensions(config):
     parallel_libraries = ['gomp'] if has_openmp and use_openmp else []
     parallel_macros = [('PARALLEL', None)] if has_openmp and use_openmp else []
 
+    print("AHHHHH")
+    print(use_cython)
     use_cython = False
     if use_cython:
         print('Will attempt to use Cython.')
