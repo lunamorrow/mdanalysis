@@ -95,6 +95,7 @@ try:
                Cython.__version__, required_version))
         cython_found = False
     cython_linetrace = bool(os.environ.get('CYTHON_TRACE_NOGIL', False))
+    cython_linetrace = True
 except ImportError:
     cython_found = False
     if not is_release:
