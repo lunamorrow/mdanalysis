@@ -204,25 +204,21 @@ def hasfunction(cc, funcname, include=None, extra_postargs=None):
     try:
         try:
             fname = os.path.join(tmpdir, 'funcname.c')
-            print("made it to 1\n")
             with open(fname, 'w') as f:
                 if include is not None:
                     f.write('#include {0!s}\n'.format(include))
-                    print("made it to 2\n")
                 f.write('int main(void) {\n')
                 f.write('    {0!s};\n'.format(funcname))
                 f.write('}\n')
-                print("made it to 3\n")
             # Redirect stderr to /dev/null to hide any error messages
             # from the compiler.
             # This will have to be changed if we ever have to check
             # for a function on Windows.
             devnull = open('/dev/null', 'w')
-            print("made it to 4\n")
             oldstderr = os.dup(sys.stderr.fileno())
-            print("made it to 5\n")
             os.dup2(devnull.fileno(), sys.stderr.fileno())
             print("made it to 6\n")
+            print(cc)
             objects = cc.compile([fname], output_dir=tmpdir,
                                  extra_postargs=extra_postargs)
             print("made it to 7\n")
