@@ -222,7 +222,6 @@ def hasfunction(cc, funcname, include=None, extra_postargs=None):
 
             from sysconfig import get_config_vars
             get_config_vars('CC', 'CXX', 'LDSHARED')
-            cc = 'gcc -pthread -B /home/lunamorrow/miniconda3/compiler_compat'
 
             objects = cc.compile([fname], output_dir=tmpdir,
                                  extra_postargs=extra_postargs)
