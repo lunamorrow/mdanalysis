@@ -239,6 +239,8 @@ def detect_openmp():
     compiler.add_library('gomp')
     include = '<omp.h>'
     extra_postargs = ['-fopenmp']
+    print(compiler)
+    print(compiler.__version__)
     hasopenmp = hasfunction(compiler, 'omp_get_num_threads()', include=include,
                             extra_postargs=extra_postargs)
     if hasopenmp:
